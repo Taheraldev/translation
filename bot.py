@@ -1,71 +1,123 @@
 import logging
-import io
+import os
+import requests
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-import pdfcrowd
+from docx import Document
+from pptx import Presentation
 
-# إعداد تسجيل الأخطاء
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
+# إعداد تسجيل الأحداث
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
-# بيانات PDFCrowd
-PDFCROWD_USERNAME = "taherja"
-PDFCROWD_API_KEY = "4f59bd9b2030deabe9d14c92ed65817a"
+# رابط واجهة API لـ LibreTranslate
+LIBRE_TRANSLATE_URL = "https://libretranslate.com/translate"
 
-# ضع توكن بوت تليجرام الخاص بك هنا
-TELEGRAM_BOT_TOKEN = "5146976580:AAH0ZpK52d6fKJY04v-9mRxb6Z1fTl0xNLw"
+def translate_text(text: str, source: str = "en", target: str = "ar") -> str:
+    """
+    تستخدم هذه الدالة لإرسال النص إلى LibreTranslate API وترجمة النص.
+    """
+    payload = {
+        "q": text,
+        "source": source,
+        "target": target,
+        "format": "text"
+    }
+    try:
+        response = requests.post(LIBRE_TRANSLATE_URL, data=payload)
+        if response.status_code == 200:
+            result = response.json()
+            return result["translatedText"]
+        else:
+            logger.error("خطأ في الترجمة: %s", response.text)
+            return text
+    except Exception as e:
+        logger.error("استثناء أثناء الترجمة: %s", e)
+        return text
+
+def process_docx(file_path: str) -> str:
+    """
+    استخراج النص من ملف DOCX.
+    """
+    doc = Document(file_path)
+    full_text = []
+    for para in doc.paragraphs:
+        full_text.append(para.text)
+    return "\n".join(full_text)
+
+def create_translated_docx(translated_text: str, output_path: str):
+    """
+    إنشاء ملف DOCX جديد يحتوي على النص المترجم.
+    """
+    doc = Document()
+    for paragraph in translated_text.split("\n"):
+        doc.add_paragraph(paragraph)
+    doc.save(output_path)
+
+def process_pptx(file_path: str) -> str:
+    """
+    استخراج النص من ملف PPTX.
+    """
+    prs = Presentation(file_path)
+    texts = []
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if hasattr(shape, "text"):
+                texts.append(shape.text)
+    return "\n".join(texts)
+
+def create_translated_pptx(original_path: str, translated_text: str, output_path: str):
+    """
+    إنشاء ملف PPTX جديد مع النصوص المترجمة.
+    يُلاحظ أن هذه العملية تقديرية، حيث نحاول استبدال النصوص في الشرائح بالنص المترجم.
+    """
+    prs = Presentation(original_path)
+    # تقسيم النص المترجم بناءً على عدد الأسطر (هذه الطريقة تقريبية وقد تحتاج لضبط)
+    translated_lines = translated_text.split("\n")
+    idx = 0
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if hasattr(shape, "text") and shape.text.strip() != "" and idx < len(translated_lines):
+                shape.text = translated_lines[idx]
+                idx += 1
+    prs.save(output_path)
 
 def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text('مرحباً! أرسل لي ملف HTML لأقوم بتحويله إلى PDF.')
-
-def convert_html_to_pdf(html_content: str) -> bytes:
-    """
-    تحويل نص HTML إلى PDF باستخدام PDFCrowd API.
-    """
-    try:
-        client = pdfcrowd.HtmlToPdfClient(PDFCROWD_USERNAME, PDFCROWD_API_KEY)
-        # استخدام BytesIO لتخزين الملف في الذاكرة
-        output_stream = io.BytesIO()
-        client.convertStringToStream(html_content, output_stream)
-        output_stream.seek(0)
-        return output_stream.read()
-    except pdfcrowd.Error as e:
-        logger.error("PDFCrowd Error: %s", e)
-        return None
+    update.message.reply_text("مرحباً! أرسل لي ملف (.docx أو .pptx) للترجمة من الإنجليزية إلى العربية.")
 
 def handle_document(update: Update, context: CallbackContext) -> None:
-    document = update.message.document
-    # التأكد من أن الملف هو HTML
-    if document.mime_type != 'text/html' and not document.file_name.endswith('.html'):
-        update.message.reply_text('يرجى إرسال ملف HTML فقط.')
-        return
+    file = update.message.document
+    file_name = file.file_name
+    file_id = file.file_id
 
-    # تنزيل الملف باستخدام الطريقة المتوافقة مع python-telegram-bot==13.15
-    file_obj = context.bot.get_file(document.file_id)
-    bio = io.BytesIO()
-    file_obj.download(out=bio)
-    bio.seek(0)
+    # تحميل الملف
+    new_file = context.bot.get_file(file_id)
+    os.makedirs("downloads", exist_ok=True)
+    file_path = os.path.join("downloads", file_name)
+    new_file.download(custom_path=file_path)
+    logger.info("تم تحميل الملف إلى %s", file_path)
 
-    try:
-        html_content = bio.read().decode('utf-8')
-    except UnicodeDecodeError:
-        update.message.reply_text('تعذر قراءة الملف، يرجى التأكد من ترميز UTF-8.')
-        return
+    if file_name.endswith(".docx"):
+        text = process_docx(file_path)
+        translated = translate_text(text)
+        output_path = os.path.join("downloads", "translated_" + file_name)
+        create_translated_docx(translated, output_path)
+        update.message.reply_document(document=open(output_path, "rb"))
+    elif file_name.endswith(".pptx"):
+        text = process_pptx(file_path)
+        translated = translate_text(text)
+        output_path = os.path.join("downloads", "translated_" + file_name)
+        create_translated_pptx(file_path, translated, output_path)
+        update.message.reply_document(document=open(output_path, "rb"))
+    else:
+        update.message.reply_text("نوع الملف غير مدعوم. يرجى إرسال ملف بصيغة .docx أو .pptx.")
 
-    # تحويل HTML إلى PDF
-    pdf_bytes = convert_html_to_pdf(html_content)
-    if pdf_bytes is None:
-        update.message.reply_text('حدث خطأ أثناء عملية التحويل.')
-        return
-
-    # إرسال ملف PDF للمستخدم
-    pdf_file = io.BytesIO(pdf_bytes)
-    pdf_file.name = 'converted.pdf'
-    update.message.reply_document(document=pdf_file, filename='converted.pdf')
-
-def main():
-    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
+def main() -> None:
+    # ضع هنا توكن بوت التليجرام الخاص بك
+    TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+    updater = Updater(TOKEN)
     dispatcher = updater.dispatcher
 
     dispatcher.add_handler(CommandHandler("start", start))
