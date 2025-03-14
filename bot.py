@@ -116,7 +116,7 @@ def handle_document(update: Update, context: CallbackContext) -> None:
 
 def main() -> None:
     # ضع هنا توكن بوت التليجرام الخاص بك
-    TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+    TOKEN = "5146976580:AAH0ZpK52d6fKJY04v-9mRxb6Z1fTl0xNLw"
     updater = Updater(TOKEN)
     dispatcher = updater.dispatcher
 
