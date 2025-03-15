@@ -2,7 +2,7 @@ import logging
 import os
 import requests
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackContext, filters
 from docx import Document
 from pptx import Presentation
 
@@ -13,7 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # رابط واجهة API لـ LibreTranslate
-LIBRE_TRANSLATE_URL = "https://libretranslate.com/translate"
+LIBRE_TRANSLATE_URL = "https://libretranslate-production-0e9e.up.railway.app/translate"
 
 def translate_text(text: str, source: str = "en", target: str = "ar") -> str:
     """
@@ -71,7 +71,6 @@ def process_pptx(file_path: str) -> str:
 def create_translated_pptx(original_path: str, translated_text: str, output_path: str):
     """
     إنشاء ملف PPTX جديد مع النصوص المترجمة.
-    يُلاحظ أن هذه العملية تقديرية، حيث نحاول استبدال النصوص في الشرائح بالنص المترجم.
     """
     prs = Presentation(original_path)
     # تقسيم النص المترجم بناءً على عدد الأسطر (هذه الطريقة تقريبية وقد تحتاج لضبط)
@@ -84,19 +83,19 @@ def create_translated_pptx(original_path: str, translated_text: str, output_path
                 idx += 1
     prs.save(output_path)
 
-def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text("مرحباً! أرسل لي ملف (.docx أو .pptx) للترجمة من الإنجليزية إلى العربية.")
+async def start(update: Update, context: CallbackContext):
+    await update.message.reply_text("مرحباً! أرسل لي ملف .docx أو .pptx للترجمة من الإنجليزية إلى العربية.")
 
-def handle_document(update: Update, context: CallbackContext) -> None:
+async def handle_document(update: Update, context: CallbackContext):
     file = update.message.document
     file_name = file.file_name
     file_id = file.file_id
 
     # تحميل الملف
-    new_file = context.bot.get_file(file_id)
+    new_file = await context.bot.get_file(file_id)
     os.makedirs("downloads", exist_ok=True)
     file_path = os.path.join("downloads", file_name)
-    new_file.download(custom_path=file_path)
+    await new_file.download_to_drive(file_path)
     logger.info("تم تحميل الملف إلى %s", file_path)
 
     if file_name.endswith(".docx"):
@@ -104,27 +103,26 @@ def handle_document(update: Update, context: CallbackContext) -> None:
         translated = translate_text(text)
         output_path = os.path.join("downloads", "translated_" + file_name)
         create_translated_docx(translated, output_path)
-        update.message.reply_document(document=open(output_path, "rb"))
+        await update.message.reply_document(document=open(output_path, "rb"))
     elif file_name.endswith(".pptx"):
         text = process_pptx(file_path)
         translated = translate_text(text)
         output_path = os.path.join("downloads", "translated_" + file_name)
         create_translated_pptx(file_path, translated, output_path)
-        update.message.reply_document(document=open(output_path, "rb"))
+        await update.message.reply_document(document=open(output_path, "rb"))
     else:
-        update.message.reply_text("نوع الملف غير مدعوم. يرجى إرسال ملف بصيغة .docx أو .pptx.")
+        await update.message.reply_text("نوع الملف غير مدعوم. يرجى إرسال ملف بصيغة .docx أو .pptx.")
 
 def main() -> None:
     # ضع هنا توكن بوت التليجرام الخاص بك
     TOKEN = "5146976580:AAH0ZpK52d6fKJY04v-9mRxb6Z1fTl0xNLw"
-    updater = Updater(TOKEN)
-    dispatcher = updater.dispatcher
+    
+    app = Application.builder().token(TOKEN).build()
 
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(MessageHandler(Filters.document, handle_document))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
-    updater.start_polling()
-    updater.idle()
+    app.run_polling()
 
 if __name__ == '__main__':
     main()
