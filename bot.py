@@ -1,10 +1,14 @@
 import logging
 import os
 import requests
+import zipfile
+from io import BytesIO
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackContext, filters
 from docx import Document
 from pptx import Presentation
+from shutil import copyfile
+from pathlib import Path
 
 # إعداد تسجيل الأحداث
 logging.basicConfig(
@@ -17,7 +21,7 @@ LIBRE_TRANSLATE_URL = "https://libretranslate-production-0e9e.up.railway.app/tra
 
 def translate_text(text: str, source: str = "en", target: str = "ar") -> str:
     """
-    تستخدم هذه الدالة لإرسال النص إلى LibreTranslate API وترجمة النص.
+    إرسال النص إلى LibreTranslate API وترجمته.
     """
     payload = {
         "q": text,
@@ -39,21 +43,42 @@ def translate_text(text: str, source: str = "en", target: str = "ar") -> str:
 
 def process_docx(file_path: str) -> str:
     """
-    استخراج النص من ملف DOCX.
+    استخراج النص من ملف DOCX وحفظ الصور داخل المجلد.
     """
     doc = Document(file_path)
     full_text = []
+    
+    # استخراج النص
     for para in doc.paragraphs:
         full_text.append(para.text)
-    return "\n".join(full_text)
+    
+    # استخراج الصور
+    docx_zip = zipfile.ZipFile(file_path, 'r')
+    image_files = [f for f in docx_zip.namelist() if f.startswith('word/media/')]
+    
+    images = []
+    for image_file in image_files:
+        image_data = docx_zip.read(image_file)
+        image_name = os.path.basename(image_file)
+        image_path = os.path.join("downloads", image_name)
+        with open(image_path, 'wb') as img_file:
+            img_file.write(image_data)
+        images.append(image_path)
+    
+    return "\n".join(full_text), images
 
-def create_translated_docx(translated_text: str, output_path: str):
+def create_translated_docx_with_images(translated_text: str, image_paths: list, output_path: str):
     """
-    إنشاء ملف DOCX جديد يحتوي على النص المترجم.
+    إنشاء ملف DOCX جديد يحتوي على النص المترجم والصور.
     """
     doc = Document()
     for paragraph in translated_text.split("\n"):
         doc.add_paragraph(paragraph)
+    
+    # إضافة الصور
+    for image_path in image_paths:
+        doc.add_paragraph().add_run().add_picture(image_path)
+    
     doc.save(output_path)
 
 def process_pptx(file_path: str) -> str:
@@ -73,7 +98,6 @@ def create_translated_pptx(original_path: str, translated_text: str, output_path
     إنشاء ملف PPTX جديد مع النصوص المترجمة.
     """
     prs = Presentation(original_path)
-    # تقسيم النص المترجم بناءً على عدد الأسطر (هذه الطريقة تقريبية وقد تحتاج لضبط)
     translated_lines = translated_text.split("\n")
     idx = 0
     for slide in prs.slides:
@@ -99,10 +123,10 @@ async def handle_document(update: Update, context: CallbackContext):
     logger.info("تم تحميل الملف إلى %s", file_path)
 
     if file_name.endswith(".docx"):
-        text = process_docx(file_path)
+        text, images = process_docx(file_path)
         translated = translate_text(text)
         output_path = os.path.join("downloads", "translated_" + file_name)
-        create_translated_docx(translated, output_path)
+        create_translated_docx_with_images(translated, images, output_path)
         await update.message.reply_document(document=open(output_path, "rb"))
     elif file_name.endswith(".pptx"):
         text = process_pptx(file_path)
