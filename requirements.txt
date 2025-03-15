@@ -1,4 +1,2 @@
 python-telegram-bot==13.15
-apify-client 
-pymupdf 
-requests
+groupdocs-translation-cloud
