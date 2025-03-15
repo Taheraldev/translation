@@ -1,141 +1,84 @@
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-from telegram import Update, InputFile
 import os
-import fitz
-from apify_client import ApifyClient
+import logging
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-# إعدادات Apify
-APIFY_API_KEY = "apify_api_f3RTo40c6qrsfZmg9Fw4fIvkZgpgU50ausCM"
-ACTOR_ID = "web.harvester/reverso-translator"
+# استيراد مكتبة GroupDocs Translation Cloud
+import groupdocs_translation_cloud
+from groupdocs_translation_cloud import Configuration, TranslationApi, TranslateDocumentRequest, TranslateOptions
 
-# إعدادات البوت
-TOKEN = "5146976580:AAH0ZpK52d6fKJY04v-9mRxb6Z1fTl0xNLw"
+# إعداد السجل (Logging)
+logging.basicConfig(level=logging.INFO)
 
-def start(update: Update, context):
-    update.message.reply_text('مرحبا! أرسل ملف PDF لترجمته إلى الإنجليزية.')
+# بيانات اعتماد GroupDocs Translation Cloud
+CLIENT_ID = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
+CLIENT_SECRET = "20c8c4f0947d9901282ee3576ec31535"
 
-def handle_pdf(update: Update, context):
-    try:
-        # تنزيل الملف
-        file = update.message.document.get_file()
-        downloaded_file = file.download(custom_path="input.pdf")
+# تهيئة إعدادات المكتبة
+config = Configuration(CLIENT_ID, CLIENT_SECRET)
+translation_api = TranslationApi(config)
+
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("أهلاً! أرسل ملف PPTX للترجمة من الإنجليزية إلى العربية.")
+
+def document_handler(update: Update, context: CallbackContext):
+    document = update.message.document
+    # التأكد من أن الملف من نوع PPTX
+    if document.file_name.lower().endswith(".pptx"):
+        # إنشاء مجلد لتحميل الملفات إذا لم يكن موجوداً
+        os.makedirs("downloads", exist_ok=True)
+        input_path = os.path.join("downloads", document.file_name)
         
-        # معالجة الملف
-        translated_pdf = process_pdf(downloaded_file)
+        # تحميل الملف من تليجرام
+        file = context.bot.get_file(document.file_id)
+        file.download(custom_path=input_path)
+        update.message.reply_text("تم تحميل الملف، جارٍ الترجمة...")
         
-        # إرسال الملف المترجم
-        with open(translated_pdf, 'rb') as f:
-            update.message.reply_document(document=InputFile(f, filename="translated.pdf"))
+        # تحديد مسار الملف المترجم
+        output_file_name = "translated_" + document.file_name
+        output_path = os.path.join("downloads", output_file_name)
         
-    except Exception as e:
-        update.message.reply_text(f'حدث خطأ: {str(e)}')
-    finally:
-        # تنظيف الملفات المؤقتة
-        if os.path.exists(downloaded_file):
-            os.remove(downloaded_file)
-        if os.path.exists(translated_pdf):
-            os.remove(translated_pdf)
-
-def process_pdf(input_path):
-    # استخراج النصوص ومواقعها
-    text_blocks = extract_text_with_positions(input_path)
-    
-    # ترجمة النصوص
-    translated_blocks = translate_texts(text_blocks)
-    
-    # إنشاء PDF جديد
-    output_path = "translated_output.pdf"
-    create_translated_pdf(output_path, translated_blocks)
-    
-    return output_path
-
-def extract_text_with_positions(pdf_path):
-    doc = fitz.open(pdf_path)
-    text_data = []
-    
-    for page_num, page in enumerate(doc):
-        blocks = page.get_text("dict")["blocks"]
-        for block in blocks:
-            if "lines" in block:
-                for line in block["lines"]:
-                    for span in line["spans"]:
-                        text_data.append({
-                            "text": span["text"],
-                            "page": page_num,
-                            "bbox": span["bbox"],
-                            "fontsize": span["size"],
-                            "fontname": span["font"]
-                        })
-    return text_data
-
-def translate_texts(text_blocks):
-    client = ApifyClient(APIFY_API_KEY)
-    
-    # إعداد بيانات الترجمة لـ Reverso
-    run_input = {
-        "texts": [tb["text"] for tb in text_blocks],
-        "sourceLang": "ar",
-        "targetLang": "en",
-        "detailedResults": True
-    }
-    
-    try:
-        # تشغيل مهمة الترجمة
-        run = client.actor(ACTOR_ID).call(run_input=run_input)
-        
-        # استخراج النتائج
-        translated_items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
-        
-        # دمج النتائج مع البيانات الأصلية
-        for i, tb in enumerate(text_blocks):
-            if i < len(translated_items):
-                tb["translated_text"] = translated_items[i].get("translation", "")
-            else:
-                tb["translated_text"] = "[ترجمة غير متوفرة]"
-        
-        return text_blocks
-    except Exception as e:
-        raise Exception(f"فشل في الترجمة: {str(e)}")
-
-def create_translated_pdf(output_path, translated_blocks):
-    doc = fitz.open()
-    
-    current_page = -1
-    page = None
-    
-    for block in translated_blocks:
-        if block["page"] != current_page:
-            page = doc.new_page(-1, width=612, height=792)
-            current_page = block["page"]
-        
-        # الحفاظ على التنسيق الأصلي
-        rc = block["bbox"]
         try:
-            page.insert_text(
-                point=(rc[0], rc[1]),
-                text=block["translated_text"],
-                fontname=block["fontname"],
-                fontsize=block["fontsize"],
-                color=(0, 0, 0)
+            # إعداد خيارات الترجمة
+            translate_options = TranslateOptions(
+                file_path=input_path,          # مسار الملف الأصلي
+                output_path=output_path,         # مسار الملف الناتج
+                source_language="en",            # اللغة الأصلية (إنجليزي)
+                target_language="ar"             # اللغة الهدف (عربي)
             )
-        except:
-            # استخدام خط افتراضي إذا كان الخط غير متوفر
-            page.insert_text(
-                point=(rc[0], rc[1]),
-                text=block["translated_text"],
-                fontname="helv",
-                fontsize=block["fontsize"],
-                color=(0, 0, 0)
-            )
-    
-    doc.save(output_path)
+            # إنشاء الطلب
+            request = TranslateDocumentRequest(translate_options)
+            # تنفيذ عملية الترجمة
+            response = translation_api.translate_document(request)
+            
+            # إرسال الملف المترجم للمستخدم
+            with open(output_path, "rb") as f:
+                update.message.reply_document(document=f)
+            update.message.reply_text("تمت الترجمة بنجاح!")
+            
+            # حذف الملفات المؤقتة (اختياري)
+            os.remove(input_path)
+            os.remove(output_path)
+        except Exception as e:
+            logging.error("خطأ أثناء الترجمة: %s", e)
+            update.message.reply_text(f"حدث خطأ أثناء الترجمة: {e}")
+    else:
+        update.message.reply_text("الرجاء إرسال ملف من نوع PPTX فقط.")
 
-if __name__ == "__main__":
-    updater = Updater(TOKEN, use_context=True)
+def main():
+    # أدخل توكن بوت التليجرام الخاص بك هنا
+    TELEGRAM_BOT_TOKEN = "5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A"
+    
+    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
+    # أوامر البوت
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.document.mime_type("application/pdf"), handle_pdf))
+    dp.add_handler(MessageHandler(Filters.document, document_handler))
     
+    # بدء البوت
     updater.start_polling()
     updater.idle()
+
+if __name__ == '__main__':
+    main()
