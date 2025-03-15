@@ -103,7 +103,7 @@ def create_translated_pdf(output_path, translated_blocks):
     current_page = -1
     page = None
     
-    for block in translated_blocks):
+    for block in translated_blocks:
         if block["page"] != current_page:
             page = doc.new_page(-1, width=612, height=792)
             current_page = block["page"]
