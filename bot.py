@@ -1,110 +1,178 @@
-import os
 import logging
-import pdfplumber
-from telegram import Update
+import os
+import time
+import base64
+import json
+import requests
+import chardet
+from datetime import date
+import PyPDF2
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-from deep_translator import GoogleTranslator
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from bs4 import BeautifulSoup, NavigableString
+import mtranslate
+import arabic_reshaper
+from bidi.algorithm import get_display
+from docx import Document
+from pptx import Presentation
+import pdfcrowd
+import io
 
-# إعدادات اللوج
+# إعداد تسجيل الأخطاء
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# حد أقصى لحجم الملف 1MB
-MAX_FILE_SIZE_MB = 1
-MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+# إعداد التوكن ومفاتيح API
+TELEGRAM_TOKEN = '7912949647:AAFOPvPuWtU6fyZNUCa08WuU9KVXJZZiXMM'
+CONVERTIO_API = 'https://api.convertio.co/convert'
+CONVERTIO_API_KEY = '3c50e707584d2cbe0139d35033b99d7c'
 
-# عدد الملفات المسموح بها يوميًا لكل مستخدم
-MAX_FILES_PER_DAY = 5
+# بيانات PDFCrowd (لتحويل HTML إلى PDF)
+PDFCROWD_USERNAME = "taherja"
+PDFCROWD_API_KEY = "4f59bd9b2030deabe9d14c92ed65817a"
 
-# حد أقصى لعدد الصفحات
-MAX_PAGES = 5
+# إعداد ملف بيانات المستخدمين ومعرف الإدارة
+USER_FILE = "user_data.json"
+ADMIN_CHAT_ID = 5198110160
 
-# تخزين عدد الملفات المرسلة لكل مستخدم
-user_file_counts = {}
+# لتتبع عدد الملفات المحولة يومياً لكل مستخدم (user_id: (last_date, count))
+user_file_usage = {}
 
-# استخراج النص من PDF
-def extract_text_from_pdf(pdf_path):
-    text = ""
-    with pdfplumber.open(pdf_path) as pdf:
-        if len(pdf.pages) > MAX_PAGES:
-            return None, "❌ الملف يحتوي على أكثر من 5 صفحات!"
-        for page in pdf.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text + "\n"
-    return text, None
+def load_user_data():
+    if os.path.exists(USER_FILE):
+        with open(USER_FILE, 'r', encoding='utf-8') as f:
+            try:
+                return json.load(f)
+            except Exception as e:
+                logger.error(f"Error loading user data: {e}")
+                return {}
+    return {}
 
-# ترجمة النص باستخدام Google Translate
-def translate_text(text, src_lang="auto", dest_lang="ar"):
-    translator = GoogleTranslator(source=src_lang, target=dest_lang)
-    return translator.translate(text)
+def save_user_data(data):
+    with open(USER_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
-# إنشاء ملف HTML
-def save_translated_html(text, output_path):
-    html_content = f"<html><body><p>{text.replace('\n', '<br>')}</p></body></html>"
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
+def fix_arabic(text):
+    reshaped = arabic_reshaper.reshape(text)
+    return get_display(reshaped)
 
-# بدء التعامل مع ملفات PDF
-def handle_pdf(update: Update, context: CallbackContext) -> None:
-    user_id = update.message.from_user.id
-    file = update.message.document
+def translate_text_group(text_group):
+    marker = "<<<SEP>>>"
+    combined = marker.join(segment.strip() for segment in text_group)
+    try:
+        translated_combined = mtranslate.translate(combined, 'ar', 'en')
+        translated_combined = fix_arabic(translated_combined)
+    except Exception as e:
+        logger.error(f"خطأ أثناء ترجمة المجموعة: {e}")
+        translated_combined = None
 
-    # التأكد من أن الملف بصيغة PDF فقط
-    if not file.mime_type == "application/pdf":
-        update.message.reply_text("❌ يُسمح فقط بملفات PDF!")
-        return
+    if translated_combined:
+        parts = translated_combined.split(marker)
+        if len(parts) == len(text_group):
+            final_parts = []
+            for orig, part in zip(text_group, parts):
+                leading_spaces = orig[:len(orig) - len(orig.lstrip())]
+                trailing_spaces = orig[len(orig.rstrip()):]
+                final_parts.append(leading_spaces + part + trailing_spaces)
+            return final_parts
 
-    # التحقق من الحد اليومي للملفات
-    user_file_counts[user_id] = user_file_counts.get(user_id, 0) + 1
-    if user_file_counts[user_id] > MAX_FILES_PER_DAY:
-        update.message.reply_text("❌ لقد تجاوزت الحد اليومي لعدد الملفات (5 ملفات)!")
-        return
+    result = []
+    for segment in text_group:
+        try:
+            t = mtranslate.translate(segment.strip(), 'ar', 'en')
+            t = fix_arabic(t)
+        except Exception as e:
+            logger.error(f"خطأ أثناء ترجمة الجزء: {e}")
+            t = segment
+        leading_spaces = segment[:len(segment) - len(segment.lstrip())]
+        trailing_spaces = segment[len(segment.rstrip()):]
+        result.append(leading_spaces + t + trailing_spaces)
+    return result
 
-    # التحقق من حجم الملف
-    if file.file_size > MAX_FILE_SIZE_BYTES:
-        update.message.reply_text(f"❌ الحد الأقصى لحجم الملف هو {MAX_FILE_SIZE_MB}MB!")
-        return
+def process_parent_texts(parent):
+    new_contents = []
+    group = []
+    for child in parent.contents:
+        if isinstance(child, NavigableString):
+            group.append(str(child))
+        else:
+            if group:
+                translated_group = translate_text_group(group)
+                for text in translated_group:
+                    new_contents.append(NavigableString(text))
+                group = []
+            new_contents.append(child)
+    if group:
+        translated_group = translate_text_group(group)
+        for text in translated_group:
+            new_contents.append(NavigableString(text))
+    parent.clear()
+    for item in new_contents:
+        parent.append(item)
 
-    # تنزيل الملف
-    pdf_path = f"downloads/{file.file_id}.pdf"
-    os.makedirs("downloads", exist_ok=True)
-    file.get_file().download(pdf_path)
+def translate_html(html_content):
+    soup = BeautifulSoup(html_content, 'html.parser')
+    
+    head = soup.find('head')
+    if head and not head.find('meta', charset=True):
+        meta_tag = soup.new_tag('meta', charset='UTF-8')
+        head.insert(0, meta_tag)
+    
+    for tag in soup.find_all():
+        if tag.name in ['script', 'style']:
+            continue
+        if any(isinstance(child, NavigableString) and child.strip() for child in tag.contents):
+            process_parent_texts(tag)
+    
+    return str(soup)
 
-    # استخراج النص
-    extracted_text, error = extract_text_from_pdf(pdf_path)
-    if error:
-        update.message.reply_text(error)
-        return
+def translate_docx(input_path, output_path, progress_callback=None):
+    doc = Document(input_path)
+    total = len(doc.paragraphs) if doc.paragraphs else 1
+    for i, para in enumerate(doc.paragraphs):
+        if para.text.strip():
+            try:
+                translated = mtranslate.translate(para.text, 'ar', 'en')
+                translated = fix_arabic(translated)
+                para.text = translated
+            except Exception as e:
+                logger.error(f"Error translating DOCX paragraph: {e}")
+        if progress_callback:
+            progress_callback(int(((i+1) / total) * 100))
+    doc.save(output_path)
 
-    if not extracted_text.strip():
-        update.message.reply_text("❌ لم يتم العثور على نص في الملف!")
-        return
+def translate_pptx(input_path, output_path, progress_callback=None):
+    prs = Presentation(input_path)
+    shapes_list = []
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if hasattr(shape, "text") and shape.text.strip():
+                shapes_list.append(shape)
+    total = len(shapes_list) if shapes_list else 1
+    for i, shape in enumerate(shapes_list):
+        try:
+            translated = mtranslate.translate(shape.text, 'ar', 'en')
+            translated = fix_arabic(translated)
+            shape.text = translated
+        except Exception as e:
+            logger.error(f"Error translating PPTX shape: {e}")
+        if progress_callback:
+            progress_callback(int(((i+1) / total) * 100))
+    prs.save(output_path)
 
-    # ترجمة النص
-    translated_text = translate_text(extracted_text)
+def convert_html_to_pdf(html_content: str) -> bytes:
+    try:
+        client = pdfcrowd.HtmlToPdfClient(PDFCROWD_USERNAME, PDFCROWD_API_KEY)
+        output_stream = io.BytesIO()
+        client.convertStringToStream(html_content, output_stream)
+        output_stream.seek(0)
+        return output_stream.read()
+    except pdfcrowd.Error as e:
+        logger.error("PDFCrowd Error: %s", e)
+        return None
 
-    # إنشاء ملف HTML
-    html_path = pdf_path.replace(".pdf", ".html")
-    save_translated_html(translated_text, html_path)
+# باقي الدوال (handle_document, start, main) تبقى كما هي بدون تغيير
+# ... [يجب نسخها كما هي من الكود الأصلي] ...
 
-    # إرسال الملف المترجم
-    with open(html_path, "rb") as html_file:
-        update.message.reply_document(document=html_file, filename="translated.html", caption="✅ تم ترجمة الملف بنجاح!")
-
-# دالة البدء
-def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text("👋 أهلاً بك! أرسل لي ملف PDF وسأقوم بترجمته لك.")
-
-def main():
-    TOKEN = "5146976580:AAH0ZpK52d6fKJY04v-9mRxb6Z1fTl0xNLw"
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.document.mime_type("application/pdf"), handle_pdf))
-
-    updater.start_polling()
-    updater.idle()
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    main()      
