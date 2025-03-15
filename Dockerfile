@@ -1,13 +1,5 @@
-FROM python:3.9-slim
-
-
-# نسخ ملف requirements.txt وتثبيت المكتبات
-COPY requirements.txt /app/
+FROM python:3.9
 WORKDIR /app
-RUN pip3 install --no-cache-dir -r requirements.txt
-
-# نسخ باقي ملفات المشروع
-COPY . /app/
-
-# الأمر لتشغيل البوت
+COPY . /app
+RUN pip install -r requirements.txt
 CMD ["python", "bot.py"]
