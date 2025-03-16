@@ -13,12 +13,11 @@ api = groupdocs_translation_cloud.TranslationApi(groupdocs_translation_cloud.Api
 def translate_pptx(input_path, output_path):
     try:
         # إعدادات الترجمة الجديدة
-        request = groupdocs_translation_cloud.TranslateDocumentRequest(
+        request = groupdocs_translation_cloud.TranslateDocument(
             file=open(input_path, 'rb'),
             source_language="en",
             target_language="ar",
             format="pptx",
-            storage="",
             save_path=output_path
         )
         
@@ -39,13 +38,16 @@ def handle_document(update: Update, context):
             return
 
         with tempfile.TemporaryDirectory() as tmp_dir:
+            # تنزيل الملف
             file = context.bot.get_file(document.file_id)
             input_path = os.path.join(tmp_dir, document.file_name)
             file.download(input_path)
             
+            # الترجمة
             output_path = os.path.join(tmp_dir, "translated.pptx")
             translated_path = translate_pptx(input_path, output_path)
             
+            # إرسال النتيجة
             with open(translated_path, 'rb') as f:
                 update.message.reply_document(
                     document=f,
