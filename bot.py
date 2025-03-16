@@ -1,6 +1,7 @@
 import os
 import logging
 import openai
+from openai import ChatCompletion  # استيراد ChatCompletion مباشرة
 from pptx import Presentation
 from telegram import Update, InputFile
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
@@ -17,7 +18,7 @@ def translate_text(text: str) -> str:
     تستخدم هذه الدالة واجهة ChatCompletion الجديدة لترجمة النص من الإنجليزية إلى العربية.
     """
     try:
-        response = openai.ChatCompletion.create(
+        response = ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "أنت مترجم محترف تترجم النصوص من الإنجليزية إلى العربية."},
