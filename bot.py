@@ -1,7 +1,6 @@
 import os
 import logging
 import openai
-from openai import ChatCompletion  # استيراد ChatCompletion مباشرة
 from pptx import Presentation
 from telegram import Update, InputFile
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
@@ -10,15 +9,15 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# تعيين مفتاح OpenAI من متغير البيئة
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# إعداد عميل OpenAI وفقًا للإصدار الجديد
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def translate_text(text: str) -> str:
     """
-    تستخدم هذه الدالة واجهة ChatCompletion الجديدة لترجمة النص من الإنجليزية إلى العربية.
+    تستخدم هذه الدالة واجهة OpenAI الجديدة لترجمة النص من الإنجليزية إلى العربية.
     """
     try:
-        response = ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "أنت مترجم محترف تترجم النصوص من الإنجليزية إلى العربية."},
