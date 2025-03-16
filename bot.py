@@ -11,7 +11,7 @@ from telegram.ext import (
 )
 # استيراد مكتبة GroupDocs Translation Cloud (الإصدار 25.2.0)
 from groupdocs_translation_cloud.configuration import Configuration
-from groupdocs_translation_cloud.apis.translate_api import TranslateApi
+from groupdocs_translation_cloud.translation_api import TranslationApi
 from groupdocs_translation_cloud.models.translate_document_request import TranslateDocumentRequest
 
 # إعداد بيانات اعتماد GroupDocs
@@ -19,7 +19,7 @@ CLIENT_ID = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
 CLIENT_SECRET = "20c8c4f0947d9901282ee3576ec31535"
 
 config = Configuration(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
-translation_api = TranslateApi(config)
+translation_api = TranslationApi(config)
 
 # إعداد رمز البوت الخاص بتليجرام
 TELEGRAM_BOT_TOKEN = "5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A"  # ضع هنا رمز البوت الخاص بك
