@@ -4,8 +4,8 @@ from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
 # استيراد مكتبة GroupDocs Translation Cloud
-from groupdocs_translation_cloud import Configuration, TranslationApi, TranslateOptions
-from groupdocs_translation_cloud.models import TranslateDocumentRequest
+from groupdocs_translation_cloud import Configuration, TranslationApi
+from groupdocs_translation_cloud.models import TranslateOptions, TranslateDocumentRequest
 
 # إعداد السجل (Logging)
 logging.basicConfig(level=logging.INFO)
@@ -41,10 +41,10 @@ def document_handler(update: Update, context: CallbackContext):
         try:
             # إعداد خيارات الترجمة
             translate_options = TranslateOptions(
-                file_path=input_path,          # مسار الملف الأصلي
-                output_path=output_path,         # مسار الملف الناتج
-                source_language="en",            # اللغة الأصلية (إنجليزي)
-                target_language="ar"             # اللغة الهدف (عربي)
+                file_path=input_path,   # مسار الملف الأصلي
+                output_path=output_path,  # مسار الملف الناتج
+                source_language="en",     # اللغة الأصلية (إنجليزية)
+                target_language="ar"      # اللغة الهدف (عربية)
             )
             # إنشاء الطلب الخاص بالترجمة
             request = TranslateDocumentRequest(translate_options)
