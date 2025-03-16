@@ -1,4 +1,4 @@
-python-telegram-bot==13.15
+python-telegram-bot==22.0
 groupdocs-translation-cloud==25.2.0
-oauthlib
-requests-oauthlib
+oauthlib== 3.2.2
+requests-oauthlib==2.0.0
