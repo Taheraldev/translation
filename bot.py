@@ -11,20 +11,17 @@ configuration = groupdocs_translation_cloud.Configuration(client_id, client_secr
 api = groupdocs_translation_cloud.TranslationApi(groupdocs_translation_cloud.ApiClient(configuration))
 
 def translate_pptx(input_path, output_path):
-    # رفع الملف إلى السحابة
-    upload_request = groupdocs_translation_cloud.UploadFileRequest(
-        file=open(input_path, 'rb'),
-        path=os.path.basename(input_path)
-    )
-    api.upload_file(upload_request)
+    # رفع الملف باستخدام الطريقة المباشرة
+    with open(input_path, 'rb') as file_stream:
+        upload_result = api.upload_file(file_stream, os.path.basename(input_path))
     
     # تكوين طلب الترجمة
     request = groupdocs_translation_cloud.TranslateDocumentRequest(
         name=os.path.basename(input_path),
-        folder="",
-        source_language="en",
         target_language="ar",
+        source_language="en",
         format="pptx",
+        storage="",
         out_path=output_path
     )
     
@@ -37,7 +34,7 @@ def handle_document(update: Update, context):
         document = update.message.document
         
         if document.mime_type != "application/vnd.openxmlformats-officedocument.presentationml.presentation":
-            update.message.reply_text("يرجى إرسال ملف PPTX فقط.")
+            update.message.reply_text("❗ يرجى إرسال ملف PPTX فقط")
             return
 
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -52,10 +49,14 @@ def handle_document(update: Update, context):
             
             # إرسال الملف المترجم
             with open(translated_path, 'rb') as translated_file:
-                update.message.reply_document(document=translated_file)
+                update.message.reply_document(
+                    document=translated_file,
+                    caption="✅ تمت الترجمة بنجاح"
+                )
                 
     except Exception as e:
-        update.message.reply_text(f"حدث خطأ أثناء الترجمة: {str(e)}")
+        error_msg = f"❌ حدث خطأ: {str(e)}"
+        update.message.reply_text(error_msg)
         print(f"Error: {e}")
 
 def main():
