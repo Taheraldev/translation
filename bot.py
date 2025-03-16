@@ -1,84 +1,61 @@
 import os
-import logging
+import tempfile
+import groupdocs_translation_cloud
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Updater, MessageHandler, Filters
 
-# استيراد مكتبة GroupDocs Translation Cloud
-from groupdocs_translation_cloud import Configuration, TranslationApi
-from groupdocs_translation_cloud.models import TranslateOptions, TranslateDocumentRequest
+# تكوين GroupDocs API
+client_id = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
+client_secret = "20c8c4f0947d9901282ee3576ec31535"
+configuration = groupdocs_translation_cloud.Configuration(client_id, client_secret)
+api = groupdocs_translation_cloud.TranslationApi(groupdocs_translation_cloud.ApiClient(configuration))
 
-# إعداد السجل (Logging)
-logging.basicConfig(level=logging.INFO)
+def translate_pptx(input_path, output_path):
+    # رفع الملف وتكوين إعدادات الترجمة
+    file_upload = groupdocs_translation_cloud.UploadFileRequest(input_path)
+    api.upload_file(file_upload)
+    
+    request = groupdocs_translation_cloud.TranslateDocumentRequest(
+        name=os.path.basename(input_path),
+        folder="",
+        format="pptx",
+        from_lang="en",
+        to_lang="ar",
+        out_format="pptx",
+        save_path=output_path
+    )
+    
+    response = api.post_translate_document(request)
+    return response.path
 
-# بيانات اعتماد GroupDocs Translation Cloud
-CLIENT_ID = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
-CLIENT_SECRET = "20c8c4f0947d9901282ee3576ec31535"
-
-# تهيئة إعدادات المكتبة وإنشاء العميل الخاص بالترجمة
-config = Configuration(CLIENT_ID, CLIENT_SECRET)
-translation_api = TranslationApi(config)
-
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("أهلاً! أرسل ملف PPTX للترجمة من الإنجليزية إلى العربية.")
-
-def document_handler(update: Update, context: CallbackContext):
+def handle_document(update: Update, context):
     document = update.message.document
-    # التأكد من أن الملف من نوع PPTX
-    if document.file_name.lower().endswith(".pptx"):
-        # إنشاء مجلد لتحميل الملفات إذا لم يكن موجوداً
-        os.makedirs("downloads", exist_ok=True)
-        input_path = os.path.join("downloads", document.file_name)
-        
-        # تحميل الملف من تليجرام
+    
+    if document.mime_type != "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+        update.message.reply_text("يرجى إرسال ملف PPTX فقط.")
+        return
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # تنزيل الملف
         file = context.bot.get_file(document.file_id)
-        file.download(custom_path=input_path)
-        update.message.reply_text("تم تحميل الملف، جارٍ الترجمة...")
+        input_path = os.path.join(tmp_dir, document.file_name)
+        file.download(input_path)
         
-        # تحديد مسار الملف المترجم
-        output_file_name = "translated_" + document.file_name
-        output_path = os.path.join("downloads", output_file_name)
+        # الترجمة
+        output_path = os.path.join(tmp_dir, "translated.pptx")
+        translated_path = translate_pptx(input_path, output_path)
         
-        try:
-            # إعداد خيارات الترجمة
-            translate_options = TranslateOptions(
-                file_path=input_path,   # مسار الملف الأصلي
-                output_path=output_path,  # مسار الملف الناتج
-                source_language="en",     # اللغة الأصلية (إنجليزية)
-                target_language="ar"      # اللغة الهدف (عربية)
-            )
-            # إنشاء الطلب الخاص بالترجمة
-            request = TranslateDocumentRequest(translate_options)
-            # تنفيذ عملية الترجمة عبر API
-            response = translation_api.translate_document(request)
-            
-            # إرسال الملف المترجم للمستخدم
-            with open(output_path, "rb") as f:
-                update.message.reply_document(document=f)
-            update.message.reply_text("تمت الترجمة بنجاح!")
-            
-            # حذف الملفات المؤقتة (اختياري)
-            os.remove(input_path)
-            os.remove(output_path)
-        except Exception as e:
-            logging.error("خطأ أثناء الترجمة: %s", e)
-            update.message.reply_text(f"حدث خطأ أثناء الترجمة: {e}")
-    else:
-        update.message.reply_text("الرجاء إرسال ملف من نوع PPTX فقط.")
+        # إرسال الملف المترجم
+        update.message.reply_document(document=open(output_path, 'rb'))
 
 def main():
-    # أدخل توكن بوت التليجرام الخاص بك هنا
-    TELEGRAM_BOT_TOKEN = "5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A"
-    
-    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
+    updater = Updater("5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A", use_context=True)
     dp = updater.dispatcher
     
-    # أوامر البوت
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.document, document_handler))
+    dp.add_handler(MessageHandler(Filters.document, handle_document))
     
-    # بدء البوت
     updater.start_polling()
     updater.idle()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
