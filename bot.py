@@ -8,10 +8,12 @@ from telegram.ext import Updater, MessageHandler, Filters
 client_id = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
 client_secret = "20c8c4f0947d9901282ee3576ec31535"
 configuration = groupdocs_translation_cloud.Configuration(client_id, client_secret)
-api = groupdocs_translation_cloud.TranslationApi.from_config(configuration)
+api_client = groupdocs_translation_cloud.ApiClient(configuration)
+api = groupdocs_translation_cloud.TranslationApi(api_client)  # الطريقة الصحيحة للتهيئة
 
 def translate_pptx(input_path, output_path):
     try:
+        # إعدادات الترجمة
         settings = groupdocs_translation_cloud.TranslateDocument(
             source_language="en",
             target_language="ar",
@@ -20,6 +22,7 @@ def translate_pptx(input_path, output_path):
             save_path=output_path
         )
         
+        # رفع الملف وتنفيذ الترجمة
         with open(input_path, 'rb') as f:
             response = api.translate_document(settings, f)
         
@@ -38,19 +41,22 @@ def handle_document(update: Update, context):
             return
 
         with tempfile.TemporaryDirectory() as tmp_dir:
+            # تنزيل الملف
             file = context.bot.get_file(document.file_id)
             input_path = os.path.join(tmp_dir, document.file_name)
             file.download(input_path)
             
+            # الترجمة
             output_path = os.path.join(tmp_dir, "translated.pptx")
             translated_path = translate_pptx(input_path, output_path)
             
+            # إرسال النتيجة
             with open(translated_path, 'rb') as f:
-                update.message.reply_document(  # <-- تم إصلاح السطر هنا
+                update.message.reply_document(
                     document=f,
                     caption="تمت الترجمة بنجاح ✅",
                     filename=os.path.basename(translated_path)
-                )  # <-- إضافة القوس المفقود
+                )
                 
     except Exception as e:
         error_msg = f"فشلت العملية: {str(e)}"
