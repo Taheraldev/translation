@@ -5,7 +5,7 @@ from groupdocs_translation_cloud.rest import ApiException
 import io
 
 # بيانات اعتماد تيليجرام و GroupDocs
-TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'
+TELEGRAM_BOT_TOKEN = '5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A'
 CLIENT_ID = 'a0ab8978-a4d6-412d-b9cd-fbfcea706dee'
 CLIENT_SECRET = '20c8c4f0947d9901282ee3576ec31535'
 
