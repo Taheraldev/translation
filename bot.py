@@ -7,8 +7,8 @@ import time
 
 # بيانات اعتماد تيليجرام و GroupDocs
 TELEGRAM_BOT_TOKEN = '5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A'
-CLIENT_ID = 'a0ab8978-a4d6-412d-b9cd-fbfcea706dee'
-CLIENT_SECRET = '20c8c4f0947d9901282ee3576ec31535'
+APP_SID = 'a0ab8978-a4d6-412d-b9cd-fbfcea706dee'
+API_KEY = '20c8c4f0947d9901282ee3576ec31535'
 
 # إعداد GroupDocs Translation API
 configuration = groupdocs_translation_cloud.Configuration(app_sid=APP_SID, api_key=API_KEY)
