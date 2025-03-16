@@ -9,8 +9,10 @@ from telegram.ext import (
     MessageHandler,
     filters
 )
-# استيراد مكتبة GroupDocs Translation Cloud
-from groupdocs_translation_cloud import Configuration, TranslateApi, TranslateDocumentRequest
+# استيراد مكتبة GroupDocs Translation Cloud (الإصدار 25.2.0)
+from groupdocs_translation_cloud.configuration import Configuration
+from groupdocs_translation_cloud.api.translate_api import TranslateApi
+from groupdocs_translation_cloud.models.translate_document_request import TranslateDocumentRequest
 
 # إعداد بيانات اعتماد GroupDocs
 CLIENT_ID = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
@@ -42,6 +44,7 @@ def translate_file(file_path: str) -> str:
     دالة لترجمة الملف باستخدام GroupDocs Translation Cloud.
     تأخذ مسار الملف المرسل وتعيد مسار الملف المترجم.
     """
+    # إعداد الطلب لترجمة الملف
     request = TranslateDocumentRequest(
         file_path=file_path,     # مسار الملف المحلي
         target_language="ar",    # اللغة الهدف: العربية
