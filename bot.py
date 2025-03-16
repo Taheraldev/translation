@@ -5,16 +5,16 @@ from pptx import Presentation
 from telegram import Update, InputFile
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-# إعدادات السجل لتتبع الأخطاء
+# إعداد سجل الأخطاء
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# تعيين مفتاح OpenAI (تأكد من تعيين المفتاح في متغير البيئة OPENAI_API_KEY)
+# تعيين مفتاح OpenAI من متغير البيئة
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def translate_text(text: str) -> str:
     """
-    تستخدم هذه الدالة واجهة OpenAI لترجمة النص من الإنجليزية إلى العربية.
+    دالة تستخدم واجهة OpenAI لترجمة النص من الإنجليزية إلى العربية.
     """
     try:
         prompt = f"Please translate the following text from English to Arabic:\n\n{text}"
@@ -31,25 +31,36 @@ def translate_text(text: str) -> str:
 
 def process_pptx(file_path: str, output_path: str):
     """
-    تقوم هذه الدالة بفتح ملف البوربوينت، وتقوم بترجمة النصوص داخل كل شكل
+    تفتح هذه الدالة ملف البوربوينت وتترجم النصوص داخل كل فقرة
     ثم تحفظ الملف الجديد.
     """
     prs = Presentation(file_path)
     for slide in prs.slides:
         for shape in slide.shapes:
-            if shape.has_text_frame:
-                for paragraph in shape.text_frame.paragraphs:
-                    for run in paragraph.runs:
-                        if run.text.strip():
-                            translated = translate_text(run.text)
-                            run.text = translated
+            if not shape.has_text_frame:
+                continue
+            for paragraph in shape.text_frame.paragraphs:
+                # دمج كل النصوص في الفقرة في متغير واحد
+                full_text = "".join(run.text for run in paragraph.runs if run.text.strip())
+                if full_text.strip():
+                    translated = translate_text(full_text)
+                    # تحديث الفقرة: وضع الترجمة في أول run وتفريغ الباقي
+                    if paragraph.runs:
+                        paragraph.runs[0].text = translated
+                        for run in paragraph.runs[1:]:
+                            run.text = ""
     prs.save(output_path)
 
 def start(update: Update, context: CallbackContext):
-    """رسالة ترحيبية عند بدء التفاعل مع البوت"""
+    """
+    رسالة ترحيب عند بدء التفاعل مع البوت.
+    """
     update.message.reply_text("مرحباً! أرسل لي ملف بوربوينت (.pptx) وسأقوم بترجمته من الإنجليزية إلى العربية.")
 
 def handle_document(update: Update, context: CallbackContext):
+    """
+    يستقبل البوت ملف بوربوينت ويعالجه للترجمة ثم يرسله مرة أخرى.
+    """
     document = update.message.document
     file_name = document.file_name
 
@@ -57,7 +68,6 @@ def handle_document(update: Update, context: CallbackContext):
         update.message.reply_text("يرجى إرسال ملف بوربوينت بامتداد .pptx")
         return
 
-    # تحميل الملف إلى مجلد محلي
     os.makedirs("downloads", exist_ok=True)
     input_file_path = os.path.join("downloads", file_name)
     output_file_path = os.path.join("downloads", f"translated_{file_name}")
@@ -75,12 +85,11 @@ def handle_document(update: Update, context: CallbackContext):
         update.message.reply_text("حدث خطأ أثناء ترجمة الملف، يرجى المحاولة مرة أخرى.")
 
 def main():
-    # تعيين مفتاح بوت Telegram (تأكد من تعيين المفتاح في متغير البيئة TELEGRAM_TOKEN)
+    # تعيين مفتاح بوت Telegram من متغير البيئة
     telegram_token = os.getenv("TELEGRAM_TOKEN")
     updater = Updater(telegram_token, use_context=True)
     dispatcher = updater.dispatcher
 
-    # أوامر البوت
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(MessageHandler(Filters.document, handle_document))
 
