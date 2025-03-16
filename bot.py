@@ -11,7 +11,7 @@ CLIENT_ID = 'a0ab8978-a4d6-412d-b9cd-fbfcea706dee'
 CLIENT_SECRET = '20c8c4f0947d9901282ee3576ec31535'
 
 # إعداد GroupDocs Translation API
-configuration = groupdocs_translation_cloud.Configuration(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
+configuration = groupdocs_translation_cloud.Configuration(app_sid=APP_SID, api_key=API_KEY)
 api_client = groupdocs_translation_cloud.ApiClient(configuration)
 file_api = groupdocs_translation_cloud.FileApi(api_client)
 translation_api = groupdocs_translation_cloud.TranslationApi(api_client)
