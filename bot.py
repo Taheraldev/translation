@@ -1,104 +1,65 @@
-import os
-import logging
-import asyncio
-from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    ContextTypes,
-    CommandHandler,
-    MessageHandler,
-    filters
-)
-# استيراد مكتبة GroupDocs Translation Cloud (الإصدار 25.2.0)
-from groupdocs_translation_cloud.configuration import Configuration
-from groupdocs_translation_cloud.translation_api import TranslationApi
-from groupdocs_translation_cloud.models.translate_document_request import TranslateDocumentRequest
+import telegram
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+import groupdocs_translation_cloud
+from groupdocs_translation_cloud.rest import ApiException
+import io
 
-# إعداد بيانات اعتماد GroupDocs
-CLIENT_ID = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
-CLIENT_SECRET = "20c8c4f0947d9901282ee3576ec31535"
+# بيانات اعتماد تيليجرام و GroupDocs
+TELEGRAM_BOT_TOKEN = '5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A'
+CLIENT_ID = 'a0ab8978-a4d6-412d-b9cd-fbfcea706dee'
+CLIENT_SECRET = '20c8c4f0947d9901282ee3576ec31535'
 
-config = Configuration(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
-translation_api = TranslationApi(config)
+# إعداد GroupDocs Translation API
+configuration = groupdocs_translation_cloud.Configuration(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
+api_instance = groupdocs_translation_cloud.FileApi(groupdocs_translation_cloud.ApiClient(configuration))
 
-# إعداد رمز البوت الخاص بتليجرام
-TELEGRAM_BOT_TOKEN = "5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A"  # ضع هنا رمز البوت الخاص بك
+def start(update, context):
+    context.bot.send_message(chat_id=update.effective_chat.id, text="أرسل لي ملف PowerPoint (pptx) لترجمته من الإنجليزية إلى العربية.")
 
-# إعداد مسار حفظ الملفات
-DOWNLOAD_DIR = "downloads"
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-
-# إعداد تسجيل الأخطاء
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """تعليمات للمستخدم عند بدء المحادثة"""
-    await update.message.reply_text("مرحباً! أرسل لي ملف PowerPoint (pptx) للترجمة من الإنجليزية إلى العربية.")
-
-def translate_file(file_path: str) -> str:
-    """
-    دالة لترجمة الملف باستخدام GroupDocs Translation Cloud.
-    تأخذ مسار الملف المرسل وتعيد مسار الملف المترجم.
-    """
-    # إعداد الطلب لترجمة الملف
-    request = TranslateDocumentRequest(
-        file_path=file_path,     # مسار الملف المحلي
-        target_language="ar",    # اللغة الهدف: العربية
-        source_language="en"     # اللغة المصدر: الإنجليزية
-    )
-    
-    # تنفيذ طلب الترجمة
-    result = translation_api.translate_document(request)
-    
-    # حفظ الملف المترجم
-    translated_file_path = os.path.join(DOWNLOAD_DIR, "translated_" + os.path.basename(file_path))
-    with open(translated_file_path, "wb") as f:
-        f.write(result)
-    
-    return translated_file_path
-
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """معالجة الملف المرسل من المستخدم"""
-    if update.message.document is None:
-        return
-    
-    document = update.message.document
-    file_name = document.file_name
-    
-    if not file_name.lower().endswith(".pptx"):
-        await update.message.reply_text("الملف المرسل ليس بتنسيق pptx.")
-        return
-
-    # تحميل الملف من تليجرام
-    file = await context.bot.get_file(document.file_id)
-    local_file_path = os.path.join(DOWNLOAD_DIR, file_name)
-    await file.download_to_drive(custom_path=local_file_path)
-    
-    await update.message.reply_text("جاري ترجمة الملف، يرجى الانتظار...")
-    
+def translate_pptx(update, context):
     try:
-        translated_file_path = translate_file(local_file_path)
-        # إرسال الملف المترجم للمستخدم
-        with open(translated_file_path, "rb") as translated_file:
-            await update.message.reply_document(document=translated_file)
-        await update.message.reply_text("تمت الترجمة بنجاح!")
+        file = context.bot.get_file(update.message.document.file_id)
+        file_data = file.download_as_bytearray()
+        file_stream = io.BytesIO(file_data)
+
+        # تحميل الملف إلى GroupDocs Cloud
+        upload_request = groupdocs_translation_cloud.UploadFileRequest("input.pptx", file_stream)
+        api_instance.upload_file(upload_request)
+
+        # إعداد طلب الترجمة
+        settings = groupdocs_translation_cloud.TranslationOptions(
+            source_language="en",
+            target_languages=["ar"],
+            storage_path="input.pptx",
+            outputPath="translated.pptx"
+        )
+        translate_request = groupdocs_translation_cloud.TranslateDocumentRequest(settings)
+        api_instance.translate_document(translate_request)
+
+        # تنزيل الملف المترجم
+        download_request = groupdocs_translation_cloud.DownloadFileRequest("translated.pptx")
+        translated_file = api_instance.download_file(download_request)
+
+        # إرسال الملف المترجم إلى المستخدم
+        context.bot.send_document(chat_id=update.effective_chat.id, document=translated_file, filename="translated.pptx")
+
+    except ApiException as e:
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f"حدث خطأ أثناء الترجمة: {e}")
     except Exception as e:
-        logger.error("خطأ أثناء الترجمة: %s", e)
-        await update.message.reply_text("حدث خطأ أثناء الترجمة. يرجى المحاولة مرة أخرى.")
+         context.bot.send_message(chat_id=update.effective_chat.id, text=f"حدث خطأ غير معروف: {e}")
 
-async def main() -> None:
-    """بدء تشغيل البوت باستخدام ApplicationBuilder"""
-    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+def main():
+    updater = Updater(token=TELEGRAM_BOT_TOKEN, use_context=True)
+    dispatcher = updater.dispatcher
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.Document.PRESENT, handle_document))
+    start_handler = CommandHandler('start', start)
+    document_handler = MessageHandler(Filters.document.mime_type("application/vnd.openxmlformats-officedocument.presentationml.presentation"), translate_pptx)
 
-    # بدء البوت بطريقة غير متزامنة
-    await application.run_polling()
+    dispatcher.add_handler(start_handler)
+    dispatcher.add_handler(document_handler)
+
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()
