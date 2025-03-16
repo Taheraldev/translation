@@ -1,67 +1,88 @@
-import telegram
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-import groupdocs_translation_cloud
-from groupdocs_translation_cloud.rest import ApiException
-import io
-import time
+import os
+import logging
+import openai
+from pptx import Presentation
+from telegram import Update, InputFile
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-# بيانات اعتماد تيليجرام و GroupDocs
-TELEGRAM_BOT_TOKEN = '5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A'
-CLIENT_ID = 'a0ab8978-a4d6-412d-b9cd-fbfcea706dee'
-CLIENT_SECRET = '20c8c4f0947d9901282ee3576ec31535'
+# إعدادات السجل لتتبع الأخطاء
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# إعداد GroupDocs Translation API
-configuration = groupdocs_translation_cloud.Configuration(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
-api_client = groupdocs_translation_cloud.ApiClient(configuration)
-file_api = groupdocs_translation_cloud.FileApi(api_client)
-translation_api = groupdocs_translation_cloud.TranslationApi(api_client)
+# تعيين مفتاح OpenAI (تأكد من تعيين المفتاح في متغير البيئة OPENAI_API_KEY)
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-def start(update, context):
-    context.bot.send_message(chat_id=update.effective_chat.id, text="أرسل لي ملف PowerPoint (pptx) لترجمته من الإنجليزية إلى العربية.")
-
-def translate_pptx(update, context):
+def translate_text(text: str) -> str:
+    """
+    تستخدم هذه الدالة واجهة OpenAI لترجمة النص من الإنجليزية إلى العربية.
+    """
     try:
-        context.bot.send_message(chat_id=update.effective_chat.id, text="جاري بدء عملية الترجمة...")
-        file = context.bot.get_file(update.message.document.file_id)
-        file_data = file.download_as_bytearray()
-        file_stream = io.BytesIO(file_data)
-
-        # تحميل الملف إلى GroupDocs Cloud
-        files = {"file": ("input.pptx", file_stream)}
-        upload_response = file_api.upload_file("input.pptx", files)
-
-        # إعداد طلب الترجمة
-        settings = groupdocs_translation_cloud.TranslationOptions(
-            source_language="en",
-            target_languages=["ar"],
-            storage_path="input.pptx",
-            outputPath="translated.pptx"
+        prompt = f"Please translate the following text from English to Arabic:\n\n{text}"
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
         )
-        translate_request = groupdocs_translation_cloud.TranslateDocumentRequest(settings)
-        translation_api.translate_document(translate_request)
-
-        # تنزيل الملف المترجم
-        download_response = file_api.download_file("translated.pptx")
-        translated_file = io.BytesIO(download_response)
-
-        # إرسال الملف المترجم إلى المستخدم
-        context.bot.send_document(chat_id=update.effective_chat.id, document=translated_file.getvalue(), filename="translated.pptx")
-        context.bot.send_message(chat_id=update.effective_chat.id, text="تمت ترجمة الملف بنجاح.")
-
-    except ApiException as e:
-        context.bot.send_message(chat_id=update.effective_chat.id, text=f"حدث خطأ أثناء الترجمة: {e}")
+        translation = response['choices'][0]['message']['content'].strip()
+        return translation
     except Exception as e:
-         context.bot.send_message(chat_id=update.effective_chat.id, text=f"حدث خطأ غير معروف: {e}")
+        logger.error(f"Translation error for text: {text}\nError: {e}")
+        return text  # في حال حدوث خطأ، يُعيد النص الأصلي
+
+def process_pptx(file_path: str, output_path: str):
+    """
+    تقوم هذه الدالة بفتح ملف البوربوينت، وتقوم بترجمة النصوص داخل كل شكل
+    ثم تحفظ الملف الجديد.
+    """
+    prs = Presentation(file_path)
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for paragraph in shape.text_frame.paragraphs:
+                    for run in paragraph.runs:
+                        if run.text.strip():
+                            translated = translate_text(run.text)
+                            run.text = translated
+    prs.save(output_path)
+
+def start(update: Update, context: CallbackContext):
+    """رسالة ترحيبية عند بدء التفاعل مع البوت"""
+    update.message.reply_text("مرحباً! أرسل لي ملف بوربوينت (.pptx) وسأقوم بترجمته من الإنجليزية إلى العربية.")
+
+def handle_document(update: Update, context: CallbackContext):
+    document = update.message.document
+    file_name = document.file_name
+
+    if not file_name.lower().endswith(".pptx"):
+        update.message.reply_text("يرجى إرسال ملف بوربوينت بامتداد .pptx")
+        return
+
+    # تحميل الملف إلى مجلد محلي
+    os.makedirs("downloads", exist_ok=True)
+    input_file_path = os.path.join("downloads", file_name)
+    output_file_path = os.path.join("downloads", f"translated_{file_name}")
+
+    file = context.bot.get_file(document.file_id)
+    file.download(custom_path=input_file_path)
+    update.message.reply_text("جاري معالجة الملف، يرجى الانتظار...")
+
+    try:
+        process_pptx(input_file_path, output_file_path)
+        with open(output_file_path, 'rb') as f:
+            update.message.reply_document(document=InputFile(f, filename=f"translated_{file_name}"))
+    except Exception as e:
+        logger.error(f"Error processing file: {e}")
+        update.message.reply_text("حدث خطأ أثناء ترجمة الملف، يرجى المحاولة مرة أخرى.")
 
 def main():
-    updater = Updater(token=TELEGRAM_BOT_TOKEN, use_context=True)
+    # تعيين مفتاح بوت Telegram (تأكد من تعيين المفتاح في متغير البيئة TELEGRAM_TOKEN)
+    telegram_token = os.getenv("TELEGRAM_TOKEN")
+    updater = Updater(telegram_token, use_context=True)
     dispatcher = updater.dispatcher
 
-    start_handler = CommandHandler('start', start)
-    document_handler = MessageHandler(Filters.document.mime_type("application/vnd.openxmlformats-officedocument.presentationml.presentation"), translate_pptx)
-
-    dispatcher.add_handler(start_handler)
-    dispatcher.add_handler(document_handler)
+    # أوامر البوت
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(MessageHandler(Filters.document, handle_document))
 
     updater.start_polling()
     updater.idle()
