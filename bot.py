@@ -11,22 +11,21 @@ configuration = groupdocs_translation_cloud.Configuration(client_id, client_secr
 api = groupdocs_translation_cloud.TranslationApi(groupdocs_translation_cloud.ApiClient(configuration))
 
 def translate_pptx(input_path, output_path):
-    # رفع الملف وتكوين إعدادات الترجمة
-    file_upload = groupdocs_translation_cloud.UploadFileRequest(input_path)
-    api.upload_file(file_upload)
+    # إنشاء طلب الترجمة مع رفع الملف تلقائيًا
+    file_info = groupdocs_translation_cloud.FileInfo()
+    file_info.file_path = input_path
     
     request = groupdocs_translation_cloud.TranslateDocumentRequest(
-        name=os.path.basename(input_path),
-        folder="",
+        file_info=file_info,
+        target_language="ar",
+        source_language="en",
         format="pptx",
-        from_lang="en",
-        to_lang="ar",
-        out_format="pptx",
-        save_path=output_path
+        storage="",
+        out_path=output_path
     )
     
-    response = api.post_translate_document(request)
-    return response.path
+    response = api.translate_document(request)
+    return response.out_path
 
 def handle_document(update: Update, context):
     document = update.message.document
@@ -46,7 +45,8 @@ def handle_document(update: Update, context):
         translated_path = translate_pptx(input_path, output_path)
         
         # إرسال الملف المترجم
-        update.message.reply_document(document=open(output_path, 'rb'))
+        with open(output_path, 'rb') as translated_file:
+            update.message.reply_document(document=translated_file)
 
 def main():
     updater = Updater("5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A", use_context=True)
