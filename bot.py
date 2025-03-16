@@ -11,7 +11,7 @@ from telegram.ext import (
 )
 # استيراد مكتبة GroupDocs Translation Cloud (الإصدار 25.2.0)
 from groupdocs_translation_cloud.configuration import Configuration
-from groupdocs_translation_cloud.api.translate_api import TranslateApi
+from groupdocs_translation_cloud.apis.translate_api import TranslateApi
 from groupdocs_translation_cloud.models.translate_document_request import TranslateDocumentRequest
 
 # إعداد بيانات اعتماد GroupDocs
