@@ -4,8 +4,8 @@ from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
 # استيراد مكتبة GroupDocs Translation Cloud
-import groupdocs_translation_cloud
-from groupdocs_translation_cloud import Configuration, TranslationApi, TranslateDocumentRequest, TranslateOptions
+from groupdocs_translation_cloud import Configuration, TranslationApi, TranslateOptions
+from groupdocs_translation_cloud.models import TranslateDocumentRequest
 
 # إعداد السجل (Logging)
 logging.basicConfig(level=logging.INFO)
@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO)
 CLIENT_ID = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
 CLIENT_SECRET = "20c8c4f0947d9901282ee3576ec31535"
 
-# تهيئة إعدادات المكتبة
+# تهيئة إعدادات المكتبة وإنشاء العميل الخاص بالترجمة
 config = Configuration(CLIENT_ID, CLIENT_SECRET)
 translation_api = TranslationApi(config)
 
@@ -46,9 +46,9 @@ def document_handler(update: Update, context: CallbackContext):
                 source_language="en",            # اللغة الأصلية (إنجليزي)
                 target_language="ar"             # اللغة الهدف (عربي)
             )
-            # إنشاء الطلب
+            # إنشاء الطلب الخاص بالترجمة
             request = TranslateDocumentRequest(translate_options)
-            # تنفيذ عملية الترجمة
+            # تنفيذ عملية الترجمة عبر API
             response = translation_api.translate_document(request)
             
             # إرسال الملف المترجم للمستخدم
