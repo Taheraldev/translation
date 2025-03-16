@@ -47,7 +47,7 @@ def handle_file(update: Update, context: CallbackContext):
                 # لكن يُفضل إرسال النص المنطقي (غير المعكوس) إلى خدمة الترجمة.
                 
                 # ترجمة النص من العربية إلى الإنجليزية
-                translated = translator.translate(refined_text, src="ar", dest="en")
+                translated = translator.translate(refined_text, src="en", dest="ar")
                 shape.text = translated.text
 
                 # محاولة تعديل اتجاه النص ليكون من اليمين إلى اليسار (RTL)
