@@ -20,7 +20,7 @@ config = Configuration(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
 translation_api = TranslateApi(config)
 
 # إعداد رمز البوت الخاص بتليجرام
-TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"  # ضع هنا رمز البوت الخاص بك
+TELEGRAM_BOT_TOKEN = "5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A"  # ضع هنا رمز البوت الخاص بك
 
 # إعداد مسار حفظ الملفات
 DOWNLOAD_DIR = "downloads"
