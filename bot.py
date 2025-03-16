@@ -14,25 +14,27 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def translate_text(text: str) -> str:
     """
-    دالة تستخدم واجهة OpenAI لترجمة النص من الإنجليزية إلى العربية.
+    تستخدم هذه الدالة واجهة ChatCompletion الجديدة لترجمة النص من الإنجليزية إلى العربية.
     """
     try:
-        prompt = f"Please translate the following text from English to Arabic:\n\n{text}"
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": "أنت مترجم محترف تترجم النصوص من الإنجليزية إلى العربية."},
+                {"role": "user", "content": f"رجاءً قم بترجمة النص التالي من الإنجليزية إلى العربية:\n\n{text}"}
+            ],
             temperature=0.3,
         )
-        translation = response['choices'][0]['message']['content'].strip()
-        return translation
+        translated = response.choices[0].message.content.strip()
+        return translated
     except Exception as e:
         logger.error(f"Translation error for text: {text}\nError: {e}")
         return text  # في حال حدوث خطأ، يُعيد النص الأصلي
 
 def process_pptx(file_path: str, output_path: str):
     """
-    تفتح هذه الدالة ملف البوربوينت وتترجم النصوص داخل كل فقرة
-    ثم تحفظ الملف الجديد.
+    تفتح هذه الدالة ملف البوربوينت وتجمع النصوص داخل كل فقرة،
+    ثم تقوم بترجمة النص المدمج واستبداله بالنص الأصلي.
     """
     prs = Presentation(file_path)
     for slide in prs.slides:
@@ -40,11 +42,13 @@ def process_pptx(file_path: str, output_path: str):
             if not shape.has_text_frame:
                 continue
             for paragraph in shape.text_frame.paragraphs:
-                # دمج كل النصوص في الفقرة في متغير واحد
-                full_text = "".join(run.text for run in paragraph.runs if run.text.strip())
+                # دمج النصوص مع وضع مسافة بين الأجزاء
+                full_text = " ".join(run.text for run in paragraph.runs if run.text.strip())
                 if full_text.strip():
+                    logger.info(f"Original text: {full_text}")
                     translated = translate_text(full_text)
-                    # تحديث الفقرة: وضع الترجمة في أول run وتفريغ الباقي
+                    logger.info(f"Translated text: {translated}")
+                    # استبدال أول run بالنص المترجم وتفريغ باقي الـ runs
                     if paragraph.runs:
                         paragraph.runs[0].text = translated
                         for run in paragraph.runs[1:]:
@@ -52,14 +56,12 @@ def process_pptx(file_path: str, output_path: str):
     prs.save(output_path)
 
 def start(update: Update, context: CallbackContext):
-    """
-    رسالة ترحيب عند بدء التفاعل مع البوت.
-    """
+    """رسالة ترحيب عند بدء التفاعل مع البوت."""
     update.message.reply_text("مرحباً! أرسل لي ملف بوربوينت (.pptx) وسأقوم بترجمته من الإنجليزية إلى العربية.")
 
 def handle_document(update: Update, context: CallbackContext):
     """
-    يستقبل البوت ملف بوربوينت ويعالجه للترجمة ثم يرسله مرة أخرى.
+    يستقبل البوت ملف بوربوينت، يقوم بترجمته ثم يرسله مرة أخرى.
     """
     document = update.message.document
     file_name = document.file_name
