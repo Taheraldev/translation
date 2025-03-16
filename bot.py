@@ -3,6 +3,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import groupdocs_translation_cloud
 from groupdocs_translation_cloud.rest import ApiException
 import io
+import time
 
 # بيانات اعتماد تيليجرام و GroupDocs
 TELEGRAM_BOT_TOKEN = '5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A'
@@ -20,6 +21,7 @@ def start(update, context):
 
 def translate_pptx(update, context):
     try:
+        context.bot.send_message(chat_id=update.effective_chat.id, text="جاري بدء عملية الترجمة...")
         file = context.bot.get_file(update.message.document.file_id)
         file_data = file.download_as_bytearray()
         file_stream = io.BytesIO(file_data)
@@ -44,6 +46,7 @@ def translate_pptx(update, context):
 
         # إرسال الملف المترجم إلى المستخدم
         context.bot.send_document(chat_id=update.effective_chat.id, document=translated_file.getvalue(), filename="translated.pptx")
+        context.bot.send_message(chat_id=update.effective_chat.id, text="تمت ترجمة الملف بنجاح.")
 
     except ApiException as e:
         context.bot.send_message(chat_id=update.effective_chat.id, text=f"حدث خطأ أثناء الترجمة: {e}")
