@@ -5,13 +5,15 @@ from groupdocs_translation_cloud.rest import ApiException
 import io
 
 # بيانات اعتماد تيليجرام و GroupDocs
-TELEGRAM_BOT_TOKEN = '5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A'
+TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'
 CLIENT_ID = 'a0ab8978-a4d6-412d-b9cd-fbfcea706dee'
 CLIENT_SECRET = '20c8c4f0947d9901282ee3576ec31535'
 
 # إعداد GroupDocs Translation API
 configuration = groupdocs_translation_cloud.Configuration(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
-api_instance = groupdocs_translation_cloud.FileApi(groupdocs_translation_cloud.ApiClient(configuration))
+api_client = groupdocs_translation_cloud.ApiClient(configuration)
+file_api = groupdocs_translation_cloud.FileApi(api_client)
+translation_api = groupdocs_translation_cloud.TranslationApi(api_client)
 
 def start(update, context):
     context.bot.send_message(chat_id=update.effective_chat.id, text="أرسل لي ملف PowerPoint (pptx) لترجمته من الإنجليزية إلى العربية.")
@@ -23,8 +25,8 @@ def translate_pptx(update, context):
         file_stream = io.BytesIO(file_data)
 
         # تحميل الملف إلى GroupDocs Cloud
-        upload_request = groupdocs_translation_cloud.UploadFileRequest("input.pptx", file_stream)
-        api_instance.upload_file(upload_request)
+        files = {"file": ("input.pptx", file_stream)}
+        upload_response = file_api.upload_file("input.pptx", files)
 
         # إعداد طلب الترجمة
         settings = groupdocs_translation_cloud.TranslationOptions(
@@ -34,14 +36,14 @@ def translate_pptx(update, context):
             outputPath="translated.pptx"
         )
         translate_request = groupdocs_translation_cloud.TranslateDocumentRequest(settings)
-        api_instance.translate_document(translate_request)
+        translation_api.translate_document(translate_request)
 
         # تنزيل الملف المترجم
-        download_request = groupdocs_translation_cloud.DownloadFileRequest("translated.pptx")
-        translated_file = api_instance.download_file(download_request)
+        download_response = file_api.download_file("translated.pptx")
+        translated_file = io.BytesIO(download_response)
 
         # إرسال الملف المترجم إلى المستخدم
-        context.bot.send_document(chat_id=update.effective_chat.id, document=translated_file, filename="translated.pptx")
+        context.bot.send_document(chat_id=update.effective_chat.id, document=translated_file.getvalue(), filename="translated.pptx")
 
     except ApiException as e:
         context.bot.send_message(chat_id=update.effective_chat.id, text=f"حدث خطأ أثناء الترجمة: {e}")
