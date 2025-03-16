@@ -1,5 +1,3 @@
 python-telegram-bot==13.15
-groupdocs-translation-cloud==24.12.1
-requests
-oauthlib
-requests-oauthlib
+python-pptx 
+openai
