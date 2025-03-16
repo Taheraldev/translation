@@ -1,57 +1,86 @@
-import os
+import logging
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from pptx import Presentation
-from deepseek_api import translate_text  # استبدل هذا بالواجهة الفعلية
+from googletrans import Translator
+import arabic_reshaper
+from bidi.algorithm import get_display
 
-# إعدادات البوت
-TOKEN = "5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A"
-API_KEY = "sk-6f67b496dded4e8784dbee59f08d8d7f"
+# دالة لتعديل النص العربي لعرضه بشكل صحيح (اختيارية)
+def fix_arabic(text):
+    # تعيد تشكيل الحروف العربية
+    reshaped_text = arabic_reshaper.reshape(text)
+    # تطبيق خوارزمية bidi لضبط اتجاه النص
+    bidi_text = get_display(reshaped_text)
+    return bidi_text
 
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    document = update.message.document
+# إعداد المترجم
+translator = Translator()
+
+# دالة بدء البوت
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("مرحباً! أرسل لي ملف PPTX للترجمة من العربية إلى الإنجليزية.")
+
+# دالة التعامل مع ملف PPTX
+def handle_file(update: Update, context: CallbackContext):
+    # تحميل الملف المرسل وحفظه محلياً
+    file = update.message.document.get_file()
+    local_input = "input.pptx"
+    file.download(custom_path=local_input)
     
-    if document.mime_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation":
-        file = await context.bot.get_file(document.file_id)
-        original_path = f"temp_{document.file_id}.pptx"
-        translated_path = f"translated_{document.file_id}.pptx"
-        
-        await file.download_to_drive(original_path)
-        
-        # عملية الترجمة
-        prs = Presentation(original_path)
-        translate_presentation(prs)
-        prs.save(translated_path)
-        
-        await update.message.reply_document(document=open(translated_path, 'rb'))
-        
-        # تنظيف الملفات المؤقتة
-        os.remove(original_path)
-        os.remove(translated_path)
-    else:
-        await update.message.reply_text("الرجاء إرسال ملف بوربوينت بصيغة PPTX")
-
-def translate_presentation(presentation):
-    for slide in presentation.slides:
+    # فتح الملف باستخدام python-pptx
+    prs = Presentation(local_input)
+    
+    # المرور على كل الشريحة وكل شكل في الشرائح
+    for slide in prs.slides:
         for shape in slide.shapes:
-            if hasattr(shape, "text"):
-                if shape.text.strip():
-                    translated = translate_text(shape.text, "en", "ar", API_KEY)
-                    shape.text = translated
-                    
-            if shape.has_table:
-                for row in shape.table.rows:
-                    for cell in row.cells:
-                        if cell.text.strip():
-                            translated = translate_text(cell.text, "en", "ar", API_KEY)
-                            cell.text = translated
+            # التأكد من أن الشكل يحتوي على نص
+            if hasattr(shape, "text") and shape.text.strip():
+                original_text = shape.text.strip()
+                # إزالة الفراغات الزائدة وتنقية النص
+                refined_text = " ".join(original_text.split())
+                
+                # ملحوظة: إذا رغبت في عرض النص العربي بشكل صحيح في بعض الحالات،
+                # يمكنك استخدام الدالة fix_arabic على النص الأصلي.
+                # على سبيل المثال:
+                # refined_text = fix_arabic(refined_text)
+                # لكن يُفضل إرسال النص المنطقي (غير المعكوس) إلى خدمة الترجمة.
+                
+                # ترجمة النص من العربية إلى الإنجليزية
+                translated = translator.translate(refined_text, src="ar", dest="en")
+                shape.text = translated.text
 
-# استبدال هذه الدالة بواجهة الذكاء الاصطناعي الفعلية
-def translate_text(text, source_lang, target_lang, api_key):
-    # مثال باستخدام واجهة افتراضية (يجب استبدالها بالواجهة الحقيقية)
-    return "النص المترجم هنا"
+                # محاولة تعديل اتجاه النص ليكون من اليمين إلى اليسار (RTL)
+                try:
+                    if shape.has_text_frame:
+                        from pptx.oxml.ns import qn
+                        # الوصول لعنصر bodyPr الخاص بتنسيق النص داخل shape
+                        bodyPr_elements = shape.text_frame._element.xpath("./a:bodyPr")
+                        if bodyPr_elements:
+                            bodyPr = bodyPr_elements[0]
+                            # تعيين خاصية RTL للقيمة 1
+                            bodyPr.set(qn("a:rtl"), "1")
+                except Exception as e:
+                    # في حال حدوث خطأ أثناء تعديل اتجاه النص، يتم طباعته دون تعطيل البوت
+                    print("Error setting RTL for a shape:", e)
+    
+    # حفظ الملف الجديد بعد الترجمة
+    output_file = "translated.pptx"
+    prs.save(output_file)
+    
+    # إرسال الملف المُترجم للمستخدم
+    update.message.reply_document(document=open(output_file, 'rb'))
 
-if __name__ == "__main__":
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
-    app.run_polling()
+def main():
+    # ضع توكن البوت الخاص بك هنا
+    updater = Updater("5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A", use_context=True)
+    dp = updater.dispatcher
+    
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.document, handle_file))
+    
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
