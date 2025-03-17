@@ -1,83 +1,76 @@
 import os
 import logging
-from telegram import Update, InputFile
+from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 import groupdocs_translation_cloud
 from groupdocs_translation_cloud.models.pdf_file_request import PdfFileRequest
 from groupdocs_translation_cloud.rest import ApiException
 
-# إعدادات التسجيل (Logging)
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
+# إعداد تسجيل الأخطاء
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 
-# إعداد متغيرات البيئة
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # ضع التوكن هنا أو احصل عليه من المتغير البيئي
-ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")  # ضع التوكن هنا أو احصل عليه من المتغير البيئي
+# إعداد توكن البوت و GroupDocs
+TELEGRAM_BOT_TOKEN = "5146976580:AAGnkVkJsI37f8rWXOUjHcbZYoMIvhWHOW8"  # استبدل بتوكن البوت الخاص بك
+ACCESS_TOKEN = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYmYiOjE3NDIxOTY0ODIsImV4cCI6MTc0MjIwMDA4MiwiaXNzIjoiaHR0cHM6Ly9hcGkuZ3JvdXBkb2NzLmNsb3VkIiwiYXVkIjpbImh0dHBzOi8vYXBpLmdyb3VwZG9jcy5jbG91ZC9yZXNvdXJjZXMiLCJhcGkuYmlsbGluZyIsImFwaS5pZGVudGl0eSIsImFwaS5wcm9kdWN0cyIsImFwaS5zdG9yYWdlIl0sImNsaWVudF9pZCI6ImE5MWE2YWQxLTc2MzctNGU2NS1iNzkzLTQxYWY1NTQ1MDgwNyIsImNsaWVudF9kZWZhdWx0X3N0b3JhZ2UiOiJhNzA4ZTFhYS1hMjI1LTQxNjMtYWEwNS02YzE3MDU3NTUxMzQiLCJjbGllbnRfaWRlbnRpdHlfdXNlcl9pZCI6IjEwMjY4OTYiLCJzY29wZSI6WyJhcGkuYmlsbGluZyIsImFwaS5pZGVudGl0eSIsImFwaS5wcm9kdWN0cyIsImFwaS5zdG9yYWdlIl19.TiEtrBftDVwZWPugwZeX6A3Bsd8OcmlxduIVdJu-cWtu3R73DbKe39JeAh4gdYxPpVM5QbCmGUbXZL7XjDBmtRmY8q-V9f4XpBAH18cyv8NuNUyxvNPS1j17VK46IpP7rkv7WNOBpCb-BZbUZX4VPQlftGxmiiAxeT9Imq4_2I5egdbhkUCxqkki764jWlTSTDlGrgc5JR2SnUMAsGekxw7lXHXZgndeAPUmtV4BLi6zsGQC83BkkVsKIm1i9oG5H2aBa3j95giwj-YkWlxmlneKlkkxYn4ThiNvrPYNIQE7TPGwgFqWjDqr0nxJq4pf6TfYCAEjhkLIHg1oR4dxbg"  # استبدل بتوكن GroupDocs
 
-# إعداد GroupDocs API
+# تكوين API لـ GroupDocs
 configuration = groupdocs_translation_cloud.Configuration(
     host="https://api.groupdocs.cloud/v2.0/translation"
 )
 configuration.access_token = ACCESS_TOKEN
+api_instance = groupdocs_translation_cloud.TranslationApi(groupdocs_translation_cloud.ApiClient(configuration))
 
-# دالة لمعالجة /start
+# مجلد تخزين الملفات
+DOWNLOAD_FOLDER = "./downloads"
+os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+
+# 📝 دالة بدء البوت
 def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text("👋 أهلاً! أرسل ملف PDF (أقل من 1MB و 5 صفحات) للترجمة إلى العربية.")
+    update.message.reply_text("👋 أهلاً بك! أرسل ملف PDF لترجمته.")
 
-# دالة لمعالجة الملفات المستلمة
+# 📥 دالة استقبال الملفات
 def handle_document(update: Update, context: CallbackContext) -> None:
-    file = update.message.document
-    file_size = file.file_size
-    file_name = file.file_name
-
-    # التحقق من أن الملف PDF
-    if not file_name.endswith(".pdf"):
-        update.message.reply_text("❌ الرجاء إرسال ملف PDF فقط.")
+    document = update.message.document
+    if not document.file_name.endswith(".pdf"):
+        update.message.reply_text("❌ يجب إرسال ملف PDF فقط!")
         return
 
-    # التحقق من حجم الملف (1MB كحد أقصى)
-    if file_size > 1_000_000:
-        update.message.reply_text("❌ الحد الأقصى لحجم الملف هو 1MB.")
-        return
-
-    # تنزيل الملف
-    file_path = f"downloads/{file.file_id}.pdf"
-    os.makedirs("downloads", exist_ok=True)
+    file = context.bot.get_file(document.file_id)
+    file_path = os.path.join(DOWNLOAD_FOLDER, document.file_name)
     file.download(file_path)
 
-    # إعداد API Client
-    with groupdocs_translation_cloud.ApiClient(configuration) as api_client:
-        api_instance = groupdocs_translation_cloud.TranslationApi(api_client)
+    update.message.reply_text("✅ تم تحميل الملف! ⏳ جارٍ الترجمة...")
 
-        # إعداد طلب الترجمة
-        pdf_file_request = PdfFileRequest(
+    # ترجمة الملف
+    translated_file_path = translate_pdf(file_path)
+
+    if translated_file_path:
+        update.message.reply_document(open(translated_file_path, "rb"), caption="✅ تم ترجمة الملف بنجاح!")
+    else:
+        update.message.reply_text("❌ حدث خطأ أثناء الترجمة.")
+
+# 🔄 دالة ترجمة PDF عبر GroupDocs
+def translate_pdf(pdf_path: str) -> str:
+    try:
+        pdf_request = PdfFileRequest(
+            file=open(pdf_path, "rb"),
             source_language="en",
-            target_languages=["ar"],
-            original_file_name=file_name,
-            url=None,
-            savingMode="Files",
-            outputFormat="pdf",
-            preserveFormatting=True
+            target_language="ar"
         )
+        response = api_instance.pdf_post(pdf_request)
 
-        try:
-            # تنفيذ الترجمة
-            api_response = api_instance.pdf_post(pdf_file_request=pdf_file_request)
-            translated_file_url = api_response.result.urls[0]
+        if response.status == "Ok":
+            translated_file_path = pdf_path.replace(".pdf", "_translated.pdf")
+            with open(translated_file_path, "wb") as f:
+                f.write(response.file_content)
+            return translated_file_path
+    except ApiException as e:
+        logging.error(f"❌ خطأ في API: {e}")
+    return None
 
-            # تنزيل الملف المترجم
-            translated_file_path = f"downloads/translated_{file.file_id}.pdf"
-            os.system(f"wget -O {translated_file_path} {translated_file_url}")
-
-            # إرسال الملف المترجم
-            with open(translated_file_path, "rb") as translated_file:
-                update.message.reply_document(document=InputFile(translated_file), caption="✅ تم ترجمة الملف بنجاح!")
-
-        except ApiException as e:
-            update.message.reply_text(f"❌ خطأ أثناء الترجمة: {e}")
-
-# إعداد البوت
+# ⚙️ تشغيل البوت
 def main():
-    updater = Updater(BOT_TOKEN, use_context=True)
+    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
