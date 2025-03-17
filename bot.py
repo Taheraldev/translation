@@ -5,8 +5,8 @@ from groupdocs_translation_cloud import FileRequest, Format
 
 api = groupdocs_translation_cloud.api.TranslationApi()
 file_api = groupdocs_translation_cloud.api.FileApi()
-api.api_client.configuration.client_id = "YOU_CLIENT_ID"
-api.api_client.configuration.client_secret = "YOU_CLIENT_SECRET"
+api.api_client.configuration.client_id = "a91a6ad1-7637-4e65-b793-41af55450807"
+api.api_client.configuration.client_secret = "2d0c949f2cc2d12010f5427e6c1dc4da"
 
 url = file_api.file_upload_post(file="/path/to/yourfile.docx", format=Format.Docx)
 file_request = FileRequest(source_language="en", 
