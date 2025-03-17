@@ -1,25 +1,65 @@
-ACCESS_TOKEN = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYmYiOjE3NDIxOTY0ODIsImV4cCI6MTc0MjIwMDA4MiwiaXNzIjoiaHR0cHM6Ly9hcGkuZ3JvdXBkb2NzLmNsb3VkIiwiYXVkIjpbImh0dHBzOi8vYXBpLmdyb3VwZG9jcy5jbG91ZC9yZXNvdXJjZXMiLCJhcGkuYmlsbGluZyIsImFwaS5pZGVudGl0eSIsImFwaS5wcm9kdWN0cyIsImFwaS5zdG9yYWdlIl0sImNsaWVudF9pZCI6ImE5MWE2YWQxLTc2MzctNGU2NS1iNzkzLTQxYWY1NTQ1MDgwNyIsImNsaWVudF9kZWZhdWx0X3N0b3JhZ2UiOiJhNzA4ZTFhYS1hMjI1LTQxNjMtYWEwNS02YzE3MDU3NTUxMzQiLCJjbGllbnRfaWRlbnRpdHlfdXNlcl9pZCI6IjEwMjY4OTYiLCJzY29wZSI6WyJhcGkuYmlsbGluZyIsImFwaS5pZGVudGl0eSIsImFwaS5wcm9kdWN0cyIsImFwaS5zdG9yYWdlIl19.TiEtrBftDVwZWPugwZeX6A3Bsd8OcmlxduIVdJu-cWtu3R73DbKe39JeAh4gdYxPpVM5QbCmGUbXZL7XjDBmtRmY8q-V9f4XpBAH18cyv8NuNUyxvNPS1j17VK46IpP7rkv7WNOBpCb-BZbUZX4VPQlftGxmiiAxeT9Imq4_2I5egdbhkUCxqkki764jWlTSTDlGrgc5JR2SnUMAsGekxw7lXHXZgndeAPUmtV4BLi6zsGQC83BkkVsKIm1i9oG5H2aBa3j95giwj-YkWlxmlneKlkkxYn4ThiNvrPYNIQE7TPGwgFqWjDqr0nxJq4pf6TfYCAEjhkLIHg1oR4dxbg"  # ضع التوكن الحقيقي هنا
-
-ACCESS_TOKEN = "ضع_التوكن_هنا"  # تأكد من أنه صحيح
-
+import os
 import requests
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-url = "https://api.groupdocs.cloud/v2.0/translation/pdf"
+# تعيين التوكن من متغير البيئة
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+
+if not ACCESS_TOKEN:
+    raise ValueError("❌ خطأ: لم يتم العثور على ACCESS_TOKEN. تأكد من تعيينه بشكل صحيح!")
+
+# إعداد التوكن في الهيدرز
 headers = {
-    "Authorization": f"Bearer {ACCESS_TOKEN}",
+    "Authorization": f"Bearer {ACCESS_TOKEN}".encode("utf-8", "ignore").decode("latin-1"),
     "Accept": "application/json"
 }
-files = {
-    "file": open("your_file.pdf", "rb")  # تأكد أن الملف موجود وصحيح
-}
-data = {
-    "sourceLanguage": "en",
-    "targetLanguages": ["ar"],
-    "outputFormat": "pdf"
-}
 
-response = requests.post(url, headers=headers, files=files, json=data)
+API_URL = "https://api.groupdocs.cloud/v2.0/translation/pdf"
 
-print("Response Status Code:", response.status_code)
-print("Response Text:", response.text)
+# دالة الترجمة
 
+def translate_pdf(file_path):
+    with open(file_path, "rb") as f:
+        files = {"file": f}
+        data = {
+            "sourceLanguage": "en",
+            "targetLanguages": ["ar"],
+            "outputFormat": "pdf"
+        }
+        
+        response = requests.post(API_URL, headers=headers, files=files, data=data)
+        
+        if response.status_code == 200:
+            translated_pdf_path = "translated.pdf"
+            with open(translated_pdf_path, "wb") as out_file:
+                out_file.write(response.content)
+            return translated_pdf_path
+        else:
+            print("❌ خطأ أثناء الترجمة:", response.text)
+            return None
+
+# دالة استقبال الملفات
+
+def handle_document(update: Update, context: CallbackContext):
+    file = update.message.document.get_file()
+    file_path = "received.pdf"
+    file.download(file_path)
+    
+    translated_file_path = translate_pdf(file_path)
+    if translated_file_path:
+        update.message.reply_document(document=open(translated_file_path, "rb"), caption="✅ تم الترجمة بنجاح!")
+    else:
+        update.message.reply_text("❌ حدث خطأ أثناء الترجمة.")
+
+# تشغيل البوت
+
+def main():
+    updater = Updater("5146976580:AAE2yXc-JK6MIHVlLDy-O4YODucS_u7Zq-8", use_context=True)
+    dp = updater.dispatcher
+    dp.add_handler(MessageHandler(Filters.document.mime_type("application/pdf"), handle_document))
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
