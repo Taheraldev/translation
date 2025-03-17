@@ -52,14 +52,17 @@ def handle_document(update: Update, context: CallbackContext) -> None:
 
     # 🔹 إعداد طلب الترجمة
     request = groupdocs_translation_cloud.TextDocumentFileRequest(
-        pair="en-ar",
-        format="docx",
-        name=docx_path,
-        folder="",
-        savefile=f"translated_{file.file_id}.docx",
-        masters=False,
-        elements=[]
+        source_language="en",  # لغة الملف الأصلية
+        target_languages=["ar"],  # اللغات المستهدفة
+        format="Docx",  # يجب أن يكون Docx بحرف كبير
+        output_format="Docx",  # صيغة الملف الناتج
+        name=docx_path,  # اسم الملف المترجم
+        folder="",  # قد تحتاج إلى تحديد مجلد إذا كنت تستخدم التخزين السحابي
+        savefile=f"translated_{file.file_id}.docx",  # اسم الملف النهائي
+        masters=False,  # خاصية غير ضرورية للملفات البسيطة
+        elements=[]  # العناصر المراد ترجمتها (نتركها فارغة لترجمة كل شيء)
     )
+
 
     # 🔹 إرسال الملف للترجمة
     try:
