@@ -11,9 +11,15 @@ GROUPDOCS_CLIENT_ID = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
 GROUPDOCS_CLIENT_SECRET = "20c8c4f0947d9901282ee3576ec31535"
 
 # 🔹 إعداد الـ API
-configuration = groupdocs_translation_cloud.Configuration()
-configuration.api_key["apiKey"] = GROUPDOCS_CLIENT_SECRET
-configuration.api_key["appSid"] = GROUPDOCS_CLIENT_ID
+configuration = groupdocs_translation_cloud.Configuration(
+    client_id=GROUPDOCS_CLIENT_ID,
+    client_secret=GROUPDOCS_CLIENT_SECRET
+)
+
+# ✅ توليد رمز المصادقة (Access Token)
+auth_api = groupdocs_translation_cloud.AuthApi(groupdocs_translation_cloud.ApiClient(configuration))
+token_response = auth_api.get_access_token()
+configuration.access_token = token_response.access_token  # تخزين الـ access_token
 
 api_client = groupdocs_translation_cloud.ApiClient(configuration)
 api_instance = groupdocs_translation_cloud.TranslationApi(api_client)
@@ -52,17 +58,16 @@ def handle_document(update: Update, context: CallbackContext) -> None:
 
     # 🔹 إعداد طلب الترجمة
     request = groupdocs_translation_cloud.TextDocumentFileRequest(
-        source_language="en",  # لغة الملف الأصلية
+        source_language="en",  # لغة المصدر
         target_languages=["ar"],  # اللغات المستهدفة
-        format="Docx",  # يجب أن يكون Docx بحرف كبير
-        output_format="Docx",  # صيغة الملف الناتج
-        name=docx_path,  # اسم الملف المترجم
-        folder="",  # قد تحتاج إلى تحديد مجلد إذا كنت تستخدم التخزين السحابي
-        savefile=f"translated_{file.file_id}.docx",  # اسم الملف النهائي
-        masters=False,  # خاصية غير ضرورية للملفات البسيطة
-        elements=[]  # العناصر المراد ترجمتها (نتركها فارغة لترجمة كل شيء)
+        format="Docx",  # تصحيح الصيغة
+        output_format="Docx",  # صيغة الإخراج
+        name=docx_path,
+        folder="",
+        savefile=f"translated_{file.file_id}.docx",
+        masters=False,
+        elements=[]
     )
-
 
     # 🔹 إرسال الملف للترجمة
     try:
@@ -81,7 +86,8 @@ def handle_document(update: Update, context: CallbackContext) -> None:
 
         # 🔹 تحميل الملف المترجم
         translated_docx_path = f"translated_{file.file_id}.docx"
-        response = requests.get(translated_doc_url)
+        headers = {"Accept": "application/octet-stream"}  # قد تحتاج إلى ذلك لتنزيل الملف
+        response = requests.get(translated_doc_url, headers=headers)
         with open(translated_docx_path, "wb") as f:
             f.write(response.content)
 
@@ -95,7 +101,7 @@ def handle_document(update: Update, context: CallbackContext) -> None:
 # 🔹 تشغيل البوت
 def main():
     TOKEN = "5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A"
-    updater = Updater(TOKEN, use_context=True)
+    updater = Updater(TOKEN)
     dp = updater.dispatcher
 
     dp.add_handler(MessageHandler(Filters.document, handle_document))
