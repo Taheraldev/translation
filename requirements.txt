@@ -1,5 +1,4 @@
 python-telegram-bot==13.15
 requests 
-PyPDF2 
-python-docx 
-python-pptx
+pdf2docx 
+groupdocs-translation-cloud 
