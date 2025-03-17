@@ -9,7 +9,7 @@ from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 # ==============================
 CLIENT_ID = "a91a6ad1-7637-4e65-b793-41af55450807"         # استبدل بـ Client ID الخاص بك
 CLIENT_SECRET = "2d0c949f2cc2d12010f5427e6c1dc4da" # استبدل بـ Client Secret الخاص بك
-TELEGRAM_BOT_TOKEN = "5146976580:AAHMM1HhJb-S0rD5AiEUjC2547aeqG0z2Uw"  # استبدل بتوكن بوت تيليجرام
+TELEGRAM_BOT_TOKEN = "5146976580:AAEzJbSmW0SdUMVgspWFPnhlcTUFshGjiXg"  # استبدل بتوكن بوت تيليجرام
 
 # دالة الحصول على Access Token من GroupDocs
 def get_access_token():
