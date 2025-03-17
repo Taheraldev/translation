@@ -40,11 +40,14 @@ def handle_document(update, context):
         context.bot.send_message(chat_id=update.effective_chat.id, text="جاري ترجمة الملف...")
         translated_status = translation_api.pdf_post(pdf_file_request=pdf_file_request)
 
-        # استخراج الملف المترجم من الاستجابة
-        translated_file_bytes = translated_status.result.read() # استخراج البايتات من الاستجابه
+        # طباعة كائن StatusResponse لفحص محتواه
+        print(translated_status)
+
+        # استخراج الملف المترجم من الاستجابة (يجب تعديل هذا الجزء بناءً على بنية الاستجابة)
+        # translated_file_bytes = translated_status.result.read() # هذا الجزء غير صحيح الان
 
         # إرسال الملف المترجم
-        context.bot.send_document(chat_id=update.effective_chat.id, document=translated_file_bytes, filename=f"translated_{file_name}")
+        # context.bot.send_document(chat_id=update.effective_chat.id, document=translated_file_bytes, filename=f"translated_{file_name}")
 
     except Exception as e:
         context.bot.send_message(chat_id=update.effective_chat.id, text=f"حدث خطأ: {e}")
