@@ -11,10 +11,9 @@ GROUPDOCS_CLIENT_ID = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
 GROUPDOCS_CLIENT_SECRET = "20c8c4f0947d9901282ee3576ec31535"
 
 # 🔹 إعداد الـ API
-configuration = groupdocs_translation_cloud.Configuration(
-    client_id=GROUPDOCS_CLIENT_ID,
-    client_secret=GROUPDOCS_CLIENT_SECRET
-)
+configuration = groupdocs_translation_cloud.Configuration()
+configuration.api_key["apiKey"] = GROUPDOCS_CLIENT_SECRET
+configuration.api_key["appSid"] = GROUPDOCS_CLIENT_ID
 
 # ✅ توليد رمز المصادقة (Access Token)
 auth_api = groupdocs_translation_cloud.AuthApi(groupdocs_translation_cloud.ApiClient(configuration))
