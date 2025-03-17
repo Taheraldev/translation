@@ -7,8 +7,8 @@ from telegram import Update
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
 # 🔹 بيانات المصادقة الخاصة بـ GroupDocs
-GROUPDOCS_CLIENT_ID = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
-GROUPDOCS_CLIENT_SECRET = "310ccbd37a74f255fcfce47eae846f1b"
+GROUPDOCS_CLIENT_ID = "a91a6ad1-7637-4e65-b793-41af55450807"
+GROUPDOCS_CLIENT_SECRET = "2d0c949f2cc2d12010f5427e6c1dc4da"
 
 # 🔹 دالة للحصول على Access Token مع إعادة المحاولة عند الخطأ 429
 def get_access_token():
