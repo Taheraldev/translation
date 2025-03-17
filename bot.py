@@ -1,142 +1,105 @@
 import logging
 import os
-import requests
-import docx
+import openai
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import PyPDF2
+from fpdf import FPDF
 
-# إعدادات API الخاصة بموقع otranslator.com
-API_KEY = "sk-32292721afeabc8a1f984e62dbc7f726aeab6e7c7b1547d0e1161f169971"
-TRANSLATION_ENDPOINT = "https://otranslator.com/api/v1/translate"  # تأكد من صحة الرابط حسب التوثيق
-BALANCE_ENDPOINT = "https://otranslator.com/api/v1/me"  # نقطة النهاية للتحقق من رصيد النقاط
+# إعداد التوكن الخاص بتليجرام ومفتاح OpenAI
+openai.api_key = OPENAI_API_KEY
 
-# رمز بوت تلغرام (استبدله برمز البوت الخاص بك)
-TELEGRAM_BOT_TOKEN = "6016945663:AAHjacRdRfZ2vUgS2SLmoFgHfMdUye4l6bA"
-
-# إعداد سجل الأخطاء
+# تفعيل تسجيل الأخطاء
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
 )
-logger = logging.getLogger(__name__)
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("مرحباً! أرسل ملف DOCX وسأقوم بترجمته من الإنجليزية إلى العربية.")
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("مرحبًا! أرسل لي ملف PDF للترجمة من الإنجليزية إلى العربية.")
 
-def check_credit_balance() -> int:
-    """
-    دالة للتحقق من رصيد النقاط باستخدام endpoint الخاص ب otranslator.com.
-    """
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
-    try:
-        response = requests.get(BALANCE_ENDPOINT, headers=headers)
-        if response.status_code == 200:
-            data = response.json()
-            return data.get("balance", 0)
-        else:
-            logger.error("خطأ في جلب رصيد النقاط: %s", response.text)
-            return 0
-    except Exception as e:
-        logger.error("Exception in checking credit balance: %s", e)
-        return 0
-
-def translate_text(text: str) -> str:
-    """
-    ترسل النص إلى واجهة API للترجمة وتعيد النص المترجم.
-    """
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "text": text,
-        "source_language": "en",
-        "target_language": "ar"
-    }
-    try:
-        response = requests.post(TRANSLATION_ENDPOINT, json=payload, headers=headers)
-        if response.status_code == 200:
-            data = response.json()
-            return data.get("translated_text", "")
-        else:
-            logger.error("خطأ في API الترجمة: %s %s", response.status_code, response.text)
-            return ""
-    except Exception as e:
-        logger.error("Exception during translation: %s", e)
-        return ""
-
-def process_docx(file_path: str) -> str:
-    """
-    استخراج النص من ملف DOCX.
-    """
-    doc = docx.Document(file_path)
-    full_text = []
-    for para in doc.paragraphs:
-        full_text.append(para.text)
-    return "\n".join(full_text)
-
-def create_docx(text: str, output_path: str):
-    """
-    إنشاء ملف DOCX جديد يحتوي على النص المترجم.
-    """
-    doc = docx.Document()
-    for line in text.splitlines():
-        doc.add_paragraph(line)
-    doc.save(output_path)
-
-def handle_document(update: Update, context: CallbackContext):
+async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
     document = update.message.document
-    if document.file_name.lower().endswith(".docx"):
-        # تحميل الملف
-        file = document.get_file()
-        os.makedirs("downloads", exist_ok=True)
-        file_path = os.path.join("downloads", document.file_name)
-        file.download(custom_path=file_path)
-        update.message.reply_text("تم استلام الملف. جاري عملية الترجمة...")
+    if document.mime_type != 'application/pdf':
+        await update.message.reply_text("يرجى إرسال ملف PDF صحيح.")
+        return
 
-        # التحقق من رصيد النقاط
-        balance = check_credit_balance()
-        if balance <= 0:
-            update.message.reply_text("رصيد النقاط غير كافٍ للترجمة. يرجى تعبئة الرصيد.")
-            return
+    # تنزيل ملف PDF
+    file = await document.get_file()
+    input_filename = "input.pdf"
+    await file.download_to_drive(input_filename)
+    
+    # استخراج النص من ملف PDF باستخدام PyPDF2
+    extracted_text = ""
+    try:
+        with open(input_filename, "rb") as pdf_file:
+            reader = PyPDF2.PdfReader(pdf_file)
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    extracted_text += page_text + "\n"
+    except Exception as e:
+        logging.error("Error reading PDF: %s", e)
+        await update.message.reply_text("حدث خطأ أثناء قراءة الملف.")
+        return
 
-        # استخراج النص من الملف
-        original_text = process_docx(file_path)
-        if not original_text.strip():
-            update.message.reply_text("لا يمكن استخراج نص من الملف المرسل.")
-            return
+    # التحقق من وجود نص لاستخراجه
+    if not extracted_text.strip():
+        await update.message.reply_text("لم يتمكن من استخراج أي نص من الملف.")
+        return
 
-        # ترجمة النص
-        translated_text = translate_text(original_text)
-        if not translated_text:
-            update.message.reply_text("حدث خطأ أثناء الترجمة.")
-            return
+    # ترجمة النص باستخدام OpenAI
+    prompt = f"ترجم النص التالي من اللغة الإنجليزية إلى العربية مع الحفاظ على التنسيق قدر الإمكان:\n\n{extracted_text}"
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+        translated_text = response.choices[0].message.content.strip()
+    except Exception as e:
+        logging.error("Error during translation: %s", e)
+        await update.message.reply_text("حدث خطأ أثناء الترجمة.")
+        return
 
-        # إنشاء ملف DOCX جديد بالنص المترجم
-        output_file = os.path.join("downloads", "translated_" + document.file_name)
-        create_docx(translated_text, output_file)
+    # إنشاء ملف PDF جديد بالنص المترجم باستخدام FPDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_font("Arial", size=12)
+    
+    # تقسيم النص إلى أسطر وإضافتها للملف
+    for line in translated_text.split('\n'):
+        pdf.multi_cell(0, 10, line)
+    
+    output_filename = "translated.pdf"
+    try:
+        pdf.output(output_filename)
+    except Exception as e:
+        logging.error("Error generating PDF: %s", e)
+        await update.message.reply_text("حدث خطأ أثناء إنشاء الملف المترجم.")
+        return
 
-        # إرسال الملف المترجم إلى المستخدم
-        update.message.reply_document(document=open(output_file, "rb"))
-    else:
-        update.message.reply_text("يرجى إرسال ملف بصيغة DOCX فقط.")
+    # إرسال ملف PDF المترجم للمستخدم
+    try:
+        with open(output_filename, "rb") as translated_file:
+            await update.message.reply_document(document=translated_file)
+    except Exception as e:
+        logging.error("Error sending PDF: %s", e)
+        await update.message.reply_text("حدث خطأ أثناء إرسال الملف.")
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logging.error(msg="Exception while handling an update:", exc_info=context.error)
 
 def main():
-    # إعداد بوت تلغرام
-    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
 
-    # إعداد المعالجات
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.document, handle_document))
+    # إضافة المعالجات
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.Document.PDF, handle_pdf))
+    application.add_error_handler(error_handler)
 
     # بدء البوت
-    updater.start_polling()
-    logger.info("البوت يعمل الآن...")
-    updater.idle()
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
