@@ -6,18 +6,11 @@ from pdf2docx import Converter
 from telegram import Update
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
-# 🔹 بيانات المصادقة API الخاصة بـ GroupDocs
-GROUPDOCS_CLIENT_ID = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
-GROUPDOCS_CLIENT_SECRET = "20c8c4f0947d9901282ee3576ec31535"
+# 🔹 بيانات المصادقة الخاصة بـ GroupDocs
+GROUPDOCS_CLIENT_ID = "YOUR_CLIENT_ID"
+GROUPDOCS_CLIENT_SECRET = "YOUR_CLIENT_SECRET"
 
-# 🔹 إعداد الـ API
-configuration = groupdocs_translation_cloud.Configuration()
-configuration.app_sid = GROUPDOCS_CLIENT_ID
-configuration.api_key["apiKey"] = GROUPDOCS_CLIENT_SECRET
-
-api_client = groupdocs_translation_cloud.ApiClient(configuration)
-
-# 🔹 الحصول على Access Token
+# 🔹 إعداد GroupDocs API
 def get_access_token():
     auth_url = "https://api.groupdocs.cloud/connect/token"
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
@@ -27,12 +20,26 @@ def get_access_token():
         "client_secret": GROUPDOCS_CLIENT_SECRET
     }
     response = requests.post(auth_url, headers=headers, data=data)
-    response_data = response.json()
-    
+
+    print(f"🔹 Auth Response Status Code: {response.status_code}")
+    print(f"🔹 Auth Response Text: {response.text}")
+
+    try:
+        response_data = response.json()
+    except Exception as e:
+        raise Exception(f"❌ فشل تحليل JSON: {str(e)} - الرد: {response.text}")
+
     if "access_token" in response_data:
         return response_data["access_token"]
     else:
         raise Exception(f"❌ فشل الحصول على Access Token: {response_data}")
+
+access_token = get_access_token()
+
+configuration = groupdocs_translation_cloud.Configuration()
+configuration.access_token = access_token
+api_client = groupdocs_translation_cloud.ApiClient(configuration)
+api_instance = groupdocs_translation_cloud.TranslationApi(api_client)
 
 # 🔹 تحويل PDF إلى DOCX
 def convert_pdf_to_docx(pdf_path, docx_path):
@@ -62,68 +69,41 @@ def handle_document(update: Update, context: CallbackContext) -> None:
     pdf_file.download(file_path)
 
     # 🔹 تحويل PDF إلى DOCX
+    update.message.reply_text("⏳ يتم الآن تحويل الملف إلى صيغة قابلة للترجمة...")
     convert_pdf_to_docx(file_path, docx_path)
 
     update.message.reply_text("⏳ يتم الآن إرسال الملف للترجمة...")
 
-    # 🔹 الحصول على Access Token
-    try:
-        access_token = get_access_token()
-    except Exception as e:
-        update.message.reply_text(f"❌ فشل المصادقة: {str(e)}")
-        return
-
     # 🔹 إعداد طلب الترجمة
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json",
-        "Content-Type": "application/json"
-    }
-    request_body = {
-        "sourceLanguage": "en",
-        "targetLanguages": ["ar"],
-        "format": "Docx",
-        "outputFormat": "Docx",
-        "name": docx_path,
-        "folder": "",
-        "savefile": f"translated_{file.file_id}.docx",
-        "masters": False,
-        "elements": []
-    }
+    request = groupdocs_translation_cloud.TextDocumentFileRequest(
+        sourceLanguage="en",
+        targetLanguages=["ar"],
+        format="Docx",
+        name=docx_path,
+        folder="",
+        savefile=f"translated_{file.file_id}.docx"
+    )
 
     # 🔹 إرسال الملف للترجمة
     try:
-        translate_url = "https://api.groupdocs.cloud/v2.0/translation/document"
-        response = requests.post(translate_url, headers=headers, json=request_body)
-        response_data = response.json()
-
-        if "requestId" not in response_data:
-            update.message.reply_text(f"❌ فشل إرسال الملف للترجمة: {response_data}")
-            return
-
-        request_id = response_data["requestId"]
+        response = api_instance.document_post(request)
+        request_id = response.request_id
         update.message.reply_text("🚀 الترجمة جارية... الرجاء الانتظار.")
 
         # 🔹 متابعة حالة الترجمة
         translated_doc_url = None
         while True:
-            status_url = f"https://api.groupdocs.cloud/v2.0/translation/document/{request_id}"
-            status_response = requests.get(status_url, headers=headers).json()
-            
-            if status_response.get("status") == "Completed":
-                translated_doc_url = status_response.get("url")
+            status_response = api_instance.document_request_id_get(request_id)
+            if status_response.status == "Completed":
+                translated_doc_url = status_response.url
                 break
-            elif status_response.get("status") == "Failed":
-                update.message.reply_text("❌ فشلت الترجمة!")
-                return
-
             time.sleep(3)  # الانتظار قبل الاستعلام مرة أخرى
 
         # 🔹 تحميل الملف المترجم
         translated_docx_path = f"translated_{file.file_id}.docx"
-        file_response = requests.get(translated_doc_url, headers={"Accept": "application/octet-stream"})
+        response = requests.get(translated_doc_url)
         with open(translated_docx_path, "wb") as f:
-            f.write(file_response.content)
+            f.write(response.content)
 
         # 🔹 إرسال الملف المترجم للمستخدم
         update.message.reply_document(document=open(translated_docx_path, "rb"), filename="Translated.docx")
@@ -135,7 +115,7 @@ def handle_document(update: Update, context: CallbackContext) -> None:
 # 🔹 تشغيل البوت
 def main():
     TOKEN = "5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A"
-    updater = Updater(TOKEN)
+    updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
 
     dp.add_handler(MessageHandler(Filters.document, handle_document))
