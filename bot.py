@@ -17,26 +17,32 @@ def start(update, context):
     context.bot.send_message(chat_id=update.effective_chat.id, text="أرسل لي ملف PDF لترجمته من الإنجليزية إلى العربية.")
 
 def handle_document(update, context):
-    file_id = update.message.document.file_id
-    file_info = context.bot.get_file(file_id)
-    file_path = file_info.file_path
-    file_name = update.message.document.file_name
-
-    # تنزيل الملف
-    context.bot.send_message(chat_id=update.effective_chat.id, text="جاري تنزيل الملف...")
-    file = context.bot.get_file(file_id)
-    downloaded_file = file.download_as_bytearray()
-
-    # تهيئة طلب GroupDocs Translation Cloud
-    pdf_file_request = PdfFileRequest(source_path=file_name, source_language="en", target_language="ar")
-
     try:
+        file_id = update.message.document.file_id
+        file_info = context.bot.get_file(file_id)
+        file_path = file_info.file_path
+        file_name = update.message.document.file_name
+
+        # تنزيل الملف
+        context.bot.send_message(chat_id=update.effective_chat.id, text="جاري تنزيل الملف...")
+        file = context.bot.get_file(file_id)
+        downloaded_file = file.download_as_bytearray()
+
+        # تهيئة طلب GroupDocs Translation Cloud
+        pdf_file_request = PdfFileRequest(
+            source_path=file_name,
+            source_language="en",
+            target_languages=["ar"],  # استخدام قائمة للغات الهدف
+            output_format="pdf"  # تحديد تنسيق الملف الناتج
+        )
+
         # ترجمة الملف
         context.bot.send_message(chat_id=update.effective_chat.id, text="جاري ترجمة الملف...")
         translated_file = translation_api.pdf_post(pdf_file_request=pdf_file_request)
 
         # إرسال الملف المترجم
         context.bot.send_document(chat_id=update.effective_chat.id, document=translated_file, filename=f"translated_{file_name}")
+
     except Exception as e:
         context.bot.send_message(chat_id=update.effective_chat.id, text=f"حدث خطأ: {e}")
 
