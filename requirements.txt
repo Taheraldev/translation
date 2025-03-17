@@ -2,3 +2,4 @@ python-telegram-bot
 openai
 PyPDF2
 fpdf
+python-dotenv
