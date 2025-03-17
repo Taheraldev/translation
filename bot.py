@@ -6,49 +6,31 @@ from pdf2docx import Converter
 from telegram import Update
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
-# 🔹 بيانات المصادقة الخاصة بـ GroupDocs
-GROUPDOCS_CLIENT_ID = "a91a6ad1-7637-4e65-b793-41af55450807"
-GROUPDOCS_CLIENT_SECRET = "2d0c949f2cc2d12010f5427e6c1dc4da"
+# 🔹 بيانات المصادقة API الخاصة بـ GroupDocs
+CLIENT_ID = "a91a6ad1-7637-4e65-b793-41af55450807"
+CLIENT_SECRET = "2d0c949f2cc2d12010f5427e6c1dc4da"
 
-# 🔹 دالة للحصول على Access Token مع إعادة المحاولة عند الخطأ 429
+# 🔹 دالة لجلب Access Token
 def get_access_token():
-    auth_url = "https://api.groupdocs.cloud/connect/token"
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    url = "https://api.groupdocs.cloud/connect/token"
     data = {
         "grant_type": "client_credentials",
-        "client_id": GROUPDOCS_CLIENT_ID,
-        "client_secret": GROUPDOCS_CLIENT_SECRET
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET
     }
+    response = requests.post(url, data=data)
+    
+    if response.status_code == 200:
+        return response.json().get("access_token")
+    else:
+        raise Exception(f"❌ فشل طلب المصادقة! كود الاستجابة: {response.status_code} - الرد: {response.text}")
 
-    retries = 3  # عدد المحاولات قبل الفشل النهائي
-    for attempt in range(retries):
-        response = requests.post(auth_url, headers=headers, data=data)
+# 🔹 الحصول على التوكن
+ACCESS_TOKEN = get_access_token()
 
-        print(f"🔹 محاولة {attempt + 1} - Auth Response Status Code: {response.status_code}")
-
-        # ✅ إذا كان الطلب ناجحًا (200)، نعيد الـ Access Token
-        if response.status_code == 200:
-            try:
-                response_data = response.json()
-                return response_data["access_token"]
-            except Exception as e:
-                raise Exception(f"❌ فشل تحليل JSON: {str(e)} - الرد: {response.text}")
-
-        # ⏳ إذا كان الخطأ 429 (Too Many Requests)، ننتظر قليلاً ثم نحاول مرة أخرى
-        elif response.status_code == 429:
-            print("⏳ تم رفض الطلب بسبب عدد الطلبات الكبير. سيتم إعادة المحاولة بعد 10 ثوانٍ...")
-            time.sleep(10)
-        else:
-            raise Exception(f"❌ فشل طلب المصادقة! كود الاستجابة: {response.status_code} - الرد: {response.text}")
-
-    raise Exception("❌ فشل الحصول على Access Token بعد عدة محاولات!")
-
-# 🔹 الحصول على Access Token
-access_token = get_access_token()
-
-# 🔹 إعداد API Client
+# 🔹 تهيئة API Client
 configuration = groupdocs_translation_cloud.Configuration()
-configuration.access_token = access_token
+configuration.access_token = ACCESS_TOKEN
 api_client = groupdocs_translation_cloud.ApiClient(configuration)
 api_instance = groupdocs_translation_cloud.TranslationApi(api_client)
 
@@ -86,17 +68,16 @@ def handle_document(update: Update, context: CallbackContext) -> None:
 
     # 🔹 إعداد طلب الترجمة
     request = groupdocs_translation_cloud.TextDocumentFileRequest(
-        sourceLanguage="en",
-        targetLanguages=["ar"],
-        format="Docx",  # ✅ تأكد أن الصيغة صحيحة
-        outputFormat="Docx",  # ✅ أضف هذا الحقل لمنع الخطأ
+        source_language="en",
+        target_languages=["ar"],
+        format="Docx",
+        output_format="Docx",
         name=docx_path,
         folder="",
         savefile=f"translated_{file.file_id}.docx",
         masters=False,
         elements=[]
     )
-
 
     # 🔹 إرسال الملف للترجمة
     try:
@@ -128,7 +109,7 @@ def handle_document(update: Update, context: CallbackContext) -> None:
 
 # 🔹 تشغيل البوت
 def main():
-    TOKEN = "5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A"
+    TOKEN = "5146976580:AAHc3N58Bbxh1-D2ydnA-BNlLmhXJ5kl1c0"
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
 
