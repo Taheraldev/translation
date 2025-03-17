@@ -2,7 +2,7 @@ import os
 import logging
 import requests
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
 # إعداد اللوجينج لتتبع الأحداث
 logging.basicConfig(
@@ -10,78 +10,86 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# بيانات API الترجمة
-TRANSLATION_API_KEY = "APY0Urd1nyxwRe0hwBMa9bk0s2ttKyrSBv5scX9rsv9A2ZkzvATiUoblyVM1JwD0Y"
-TRANSLATION_API_URL = "https://api.example.com/translate"  # استبدل هذا بعنوان نقطة النهاية الفعلي للـ API
+# إعداد متغيرات API الترجمة
+APYHUB_TOKEN = "APY0HI85jCUZwP9yaXqm9Yb4tEDRJ5uv2ht8jpP7PsVo8sGeWkmDAmHYM2V4Q8U7Z13gmqjzE"
+TRANSLATE_FILE_URL = "https://api.apyhub.com/translate/file"
 
-# دالة بدء البوت
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        "مرحباً! أرسل لي ملفاً (مثل pdf أو docx) وسأقوم بترجمته من الإنجليزية إلى العربية."
-    )
+# الصيغ المدعومة
+ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'html', 'xml']
 
-# دالة التعامل مع الملفات المرسلة
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+def start(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text("مرحباً! أرسل لي ملفاً (مثل pdf أو docx) وسأقوم بترجمته من الإنجليزية إلى العربية.")
+
+def handle_document(update: Update, context: CallbackContext) -> None:
     document = update.message.document
     file_name = document.file_name
-    # التأكد من أن صيغة الملف مدعومة
-    allowed_extensions = ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg', 'tiff', 'bmp', 'html', 'xml']
     ext = file_name.split('.')[-1].lower()
-    if ext not in allowed_extensions:
-        await update.message.reply_text("صيغة الملف غير مدعومة.")
+    
+    if ext not in ALLOWED_EXTENSIONS:
+        update.message.reply_text("صيغة الملف غير مدعومة.")
         return
-
-    # تحميل الملف من تيليجرام
-    file = await context.bot.get_file(document.file_id)
-    local_file_path = f"downloads/{file_name}"
+    
+    # تحميل الملف من تيليجرام وحفظه محليًا
     os.makedirs("downloads", exist_ok=True)
-    await file.download_to_drive(local_file_path)
-    await update.message.reply_text("تم استلام الملف، جاري الترجمة...")
+    file_path = os.path.join("downloads", file_name)
+    new_file = context.bot.getFile(document.file_id)
+    new_file.download(file_path)
+    
+    update.message.reply_text("تم استلام الملف، جارٍ الترجمة...")
 
     try:
-        # إعداد الطلب للـ API
-        payload = {
-            "source_lang": "en",  # اللغة الأصلية
-            "target_lang": "ar"   # اللغة المستهدفة
-        }
+        # إعداد الرؤوس والباراميترات للطلب
         headers = {
-            "Authorization": f"Bearer {TRANSLATION_API_KEY}"
+            'apy-token': APYHUB_TOKEN
         }
-        with open(local_file_path, "rb") as f:
-            files = {
-                "file": (file_name, f)
-            }
-            response = requests.post(TRANSLATION_API_URL, data=payload, files=files, headers=headers)
+        params = {
+            'transliteration': 'true'
+        }
+        files_payload = {
+            'file': open(file_path, 'rb'),
+            'language': (None, 'ar')  # نحدد هنا اللغة المطلوبة (العربية)
+        }
+        
+        # إرسال الطلب إلى API الترجمة
+        response = requests.post(TRANSLATE_FILE_URL, params=params, headers=headers, files=files_payload)
         
         if response.status_code == 200:
-            # حفظ الملف المترجم
-            translated_file_path = f"downloads/translated_{file_name}"
-            with open(translated_file_path, "wb") as out_file:
-                out_file.write(response.content)
-            await update.message.reply_text("تمت الترجمة بنجاح، جارٍ إرسال الملف...")
-            await context.bot.send_document(chat_id=update.effective_chat.id, document=open(translated_file_path, "rb"))
-            os.remove(translated_file_path)
+            data = response.json()
+            detected = data.get("detected_language", {})
+            detected_lang = detected.get("language", "غير معروف")
+            detected_score = detected.get("score", 0)
+            translated_language = data.get("translated_language", "غير معروف")
+            translation_text = data.get("translation", "")
+            transliteration_text = data.get("transliteration", "")
+            
+            # إعداد رسالة الرد
+            reply_message = f"تم الكشف عن اللغة: {detected_lang} (نسبة: {detected_score})\n"
+            reply_message += f"تم الترجمة إلى: {translated_language}\n\n"
+            reply_message += f"الترجمة:\n{translation_text}\n\n"
+            reply_message += f"النطق بالحروف اللاتينية:\n{transliteration_text}"
+            
+            update.message.reply_text(reply_message)
         else:
             logger.error(f"API Error: {response.status_code} - {response.text}")
-            await update.message.reply_text("حدث خطأ أثناء الترجمة.")
+            update.message.reply_text("حدث خطأ أثناء الترجمة. الرجاء المحاولة لاحقاً.")
     except Exception as e:
-        logger.error(e)
-        await update.message.reply_text("حدث خطأ أثناء معالجة الملف.")
+        logger.exception("Exception occurred during translation:")
+        update.message.reply_text("حدث خطأ أثناء معالجة الملف.")
     finally:
-        os.remove(local_file_path)
+        # حذف الملف المحلي بعد المعالجة
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
-def main() -> None:
-    # ضع هنا توكن البوت الخاص بك من تيليجرام
-    TELEGRAM_TOKEN = "5136337543:AAHG1tqXdpVaB-zWUn8pREf9tBi211sv6Ys"  # استبدله بتوكن البوت الخاص بك
+def main():
+    TELEGRAM_TOKEN = "5136337543:AAHG1tqXdpVaB-zWUn8pREf9tBi211sv6Ys"  # استبدل هذا بتوكن البوت الخاص بك
+    updater = Updater(TELEGRAM_TOKEN, use_context=True)
+    dp = updater.dispatcher
+    
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.document, handle_document))
+    
+    updater.start_polling()
+    updater.idle()
 
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
-
-    # تسجيل المعالجات (handlers)
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
-
-    # تشغيل البوت باستخدام polling
-    application.run_polling()
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
