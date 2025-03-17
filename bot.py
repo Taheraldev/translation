@@ -1,28 +1,28 @@
-import os
+import time
+
 import groupdocs_translation_cloud
-from groupdocs_translation_cloud.models import PresentationFileRequest
-from groupdocs_translation_cloud.rest import ApiException
-from pprint import pprint
+from groupdocs_translation_cloud import FileRequest, Format
 
-# تهيئة إعدادات API
-configuration = groupdocs_translation_cloud.Configuration(
-    host="https://api.groupdocs.cloud/v2.0/translation"
-)
-configuration.access_token = os.environ.get("ACCESS_TOKEN")  # تأكد من تعيين المتغير في البيئة
+api = groupdocs_translation_cloud.api.TranslationApi()
+file_api = groupdocs_translation_cloud.api.FileApi()
+api.api_client.configuration.client_id = "YOU_CLIENT_ID"
+api.api_client.configuration.client_secret = "YOU_CLIENT_SECRET"
 
-# تحديد بيانات الملف واللغة
-presentation_file_request = PresentationFileRequest(
-    file_info={"file_path": "Section 5d.pptx", "password": ""},  # ضع مسار ملفك هنا
-    source_language="en",  # اللغة الأصلية
-    target_language="ar"   # اللغة المستهدفة
-)
-
-# استخدام API لترجمة الملف
-with groupdocs_translation_cloud.ApiClient(configuration) as api_client:
-    api_instance = groupdocs_translation_cloud.TranslationApi(api_client)
-    try:
-        api_response = api_instance.presentation_post(presentation_file_request=presentation_file_request)
-        print("تمت الترجمة بنجاح! 🚀")
-        pprint(api_response)
-    except ApiException as e:
-        print(f"حدث خطأ أثناء الترجمة: {e}")
+url = file_api.file_upload_post(file="/path/to/yourfile.docx", format=Format.Docx)
+file_request = FileRequest(source_language="en", 
+							           target_languages=["ru"], 
+							           url=url, 
+							           format=Format.Docx,
+							           saving_mode=SavingMode.Files, 
+							           output_format=Format.Docx)
+response = api.auto_post(file_request)
+if response.status == 202:
+    while True:
+        file_response = api.document_request_id_get(request_id)
+        if file_response.status == 200:
+            print(file_response.message)
+            for lang in file_response.urls:
+                print(lang + '_' + url + ': ' + file_response.urls[
+                    lang].url)
+            break
+        time.sleep(2)
