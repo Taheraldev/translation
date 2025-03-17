@@ -8,10 +8,10 @@ from pdf2docx import Converter
 GROUPDOCS_CLIENT_ID = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
 GROUPDOCS_CLIENT_SECRET = "20c8c4f0947d9901282ee3576ec31535"
 
-configuration = groupdocs_translation_cloud.Configuration(
-    appSid=GROUPDOCS_CLIENT_ID,
-    apiKey=GROUPDOCS_CLIENT_SECRET
-)
+configuration = groupdocs_translation_cloud.Configuration()
+configuration.api_key["apiKey"] = GROUPDOCS_CLIENT_SECRET
+configuration.api_key["appSid"] = GROUPDOCS_CLIENT_ID
+
 api_client = groupdocs_translation_cloud.ApiClient(configuration)
 api_instance = groupdocs_translation_cloud.TranslationApi(api_client)
 
