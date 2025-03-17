@@ -16,9 +16,10 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # التحقق من وجود المفاتيح
 if not TELEGRAM_TOKEN or not OPENAI_API_KEY:
-    raise ValueError("يرجى ضبط متغيرات البيئة TELEGRAM_TOKEN و OPENAI_API_KEY في ملف .env")
+    raise ValueError("❌ يرجى ضبط متغيرات البيئة TELEGRAM_TOKEN و OPENAI_API_KEY في ملف .env")
 
-openai.api_key = OPENAI_API_KEY  # ضبط API Key لـ OpenAI
+# إعداد OpenAI Client API
+client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 # إعداد تسجيل الأخطاء
 logging.basicConfig(
@@ -59,10 +60,10 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ لم يتمكن من استخراج أي نص من الملف.")
         return
 
-    # ترجمة النص باستخدام OpenAI
+    # ترجمة النص باستخدام OpenAI API (تحديث للكود الجديد)
     prompt = f"ترجم النص التالي من الإنجليزية إلى العربية مع الحفاظ على المعنى:\n\n{extracted_text}"
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3
