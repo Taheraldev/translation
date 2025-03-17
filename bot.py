@@ -18,15 +18,20 @@ def start(update, context):
 
 def handle_document(update, context):
     try:
+        print("تم استلام مستند.")  # طباعة عند استلام مستند
         file_id = update.message.document.file_id
         file_info = context.bot.get_file(file_id)
         file_path = file_info.file_path
         file_name = update.message.document.file_name
 
+        print(f"اسم الملف: {file_name}")  # طباعة اسم الملف
+
         # تنزيل الملف
         context.bot.send_message(chat_id=update.effective_chat.id, text="جاري تنزيل الملف...")
         file = context.bot.get_file(file_id)
         downloaded_file = file.download_as_bytearray()
+
+        print("تم تنزيل الملف.")  # طباعة بعد تنزيل الملف
 
         # تهيئة طلب GroupDocs Translation Cloud
         pdf_file_request = PdfFileRequest(
@@ -40,8 +45,8 @@ def handle_document(update, context):
         context.bot.send_message(chat_id=update.effective_chat.id, text="جاري ترجمة الملف...")
         translated_status = translation_api.pdf_post(pdf_file_request=pdf_file_request)
 
-        # طباعة كائن StatusResponse لفحص محتواه
-        print(translated_status)
+        print("تمت ترجمة الملف.")  # طباعة بعد الترجمة
+        print(translated_status)  # طباعة محتوى الاستجابة
 
         # استخراج الملف المترجم من الاستجابة (يجب تعديل هذا الجزء بناءً على بنية الاستجابة)
         # translated_file_bytes = translated_status.result.read() # هذا الجزء غير صحيح الان
@@ -50,6 +55,7 @@ def handle_document(update, context):
         # context.bot.send_document(chat_id=update.effective_chat.id, document=translated_file_bytes, filename=f"translated_{file_name}")
 
     except Exception as e:
+        print(f"حدث خطأ: {e}")  # طباعة في حالة حدوث خطأ
         context.bot.send_message(chat_id=update.effective_chat.id, text=f"حدث خطأ: {e}")
 
 def main():
