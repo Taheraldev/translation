@@ -42,7 +42,7 @@ translation_api_instance = groupdocs_translation_cloud.TranslationApi(translatio
 # دالة رفع الملف إلى التخزين السحابي باستخدام REST API (GroupDocs Storage API)
 # ==============================
 def upload_file_to_storage(local_file_path, remote_file_path):
-    # يستخدم هذا الـ endpoint لرفع الملف إلى التخزين السحابي (الجذر الافتراضي)
+    # نستخدم مجلد "temp" لتخزين الملف (تأكد من أن الحساب يسمح بهذا المسار)
     upload_url = f"https://api.groupdocs.cloud/v2.0/storage/file/{remote_file_path}"
     headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
@@ -79,8 +79,8 @@ def handle_document(update: Update, context: CallbackContext) -> None:
 
     update.message.reply_text("⏳ جاري رفع الملف إلى التخزين السحابي...")
 
-    # نستخدم اسم الملف المحلي كاسم الملف على التخزين (يمكنك تخصيص ذلك)
-    remote_file_path = os.path.basename(local_pdf_path)
+    # استخدام مجلد "temp" لتخزين الملف على التخزين السحابي
+    remote_file_path = f"temp/{os.path.basename(local_pdf_path)}"
     try:
         upload_file_to_storage(local_pdf_path, remote_file_path)
     except Exception as e:
@@ -95,7 +95,7 @@ def handle_document(update: Update, context: CallbackContext) -> None:
         pdf_file_request.sourceLanguage = "en"
         pdf_file_request.targetLanguages = ["ar"]
         pdf_file_request.originalFileName = file.file_name  # اسم الملف الأصلي كما أُرسل من المستخدم
-        pdf_file_request.url = remote_file_path           # اسم الملف على التخزين (يُستخدم مع التخزين الافتراضي)
+        pdf_file_request.url = remote_file_path           # اسم الملف على التخزين (المسار الذي رفعناه)
         pdf_file_request.origin = "Telegram"
         pdf_file_request.savingMode = "Files"
         pdf_file_request.outputFormat = "Pdf"
