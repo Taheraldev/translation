@@ -1,5 +1,4 @@
 import os
-import time
 import requests
 import groupdocs_translation_cloud
 from telegram import Update
@@ -10,7 +9,7 @@ from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 # ==============================
 CLIENT_ID = "a91a6ad1-7637-4e65-b793-41af55450807"         # استبدل بـ Client ID الخاص بك
 CLIENT_SECRET = "2d0c949f2cc2d12010f5427e6c1dc4da" # استبدل بـ Client Secret الخاص بك
-TELEGRAM_BOT_TOKEN = "5146976580:AAGYZ-fdtsqWWF5lFVfTYWOh3IC5cbWVmp8"  # استبدل بتوكن بوت تيليجرام
+TELEGRAM_BOT_TOKEN = "5146976580:AAHMM1HhJb-S0rD5AiEUjC2547aeqG0z2Uw"  # استبدل بتوكن بوت تيليجرام
 
 # دالة الحصول على Access Token من GroupDocs
 def get_access_token():
@@ -22,9 +21,9 @@ def get_access_token():
     }
     response = requests.post(url, data=data)
     if response.status_code == 200:
-        return response.json().get("access_token")
+        return response.json()["access_token"]
     else:
-        raise Exception(f"❌ فشل طلب المصادقة! كود الاستجابة: {response.status_code} - الرد: {response.text}")
+        raise Exception(f"❌ فشل الحصول على access token: {response.status_code} - {response.text}")
 
 ACCESS_TOKEN = get_access_token()
 
@@ -42,8 +41,8 @@ translation_api_instance = groupdocs_translation_cloud.TranslationApi(translatio
 # دالة رفع الملف إلى التخزين السحابي باستخدام REST API (GroupDocs Storage API)
 # ==============================
 def upload_file_to_storage(local_file_path, remote_file_path):
-    # نستخدم اسم الملف فقط بدون مجلد، مثل "filename.pdf"
-    upload_url = f"https://api.groupdocs.cloud/v2.0/storage/file/{remote_file_path}"
+    # إضافة معلمة التخزين (storage=Default) إلى URL الرفع
+    upload_url = f"https://api.groupdocs.cloud/v2.0/storage/file/{remote_file_path}?storage=Default"
     headers = {
         "Authorization": f"Bearer {ACCESS_TOKEN}",
         "Content-Type": "application/octet-stream"
@@ -79,12 +78,12 @@ def handle_document(update: Update, context: CallbackContext) -> None:
 
     update.message.reply_text("⏳ جاري رفع الملف إلى التخزين السحابي...")
 
-    # استخدام اسم الملف فقط بدون مجلد
+    # نستخدم اسم الملف فقط بدون مجلد
     remote_file_path = os.path.basename(local_pdf_path)
     try:
         upload_file_to_storage(local_pdf_path, remote_file_path)
     except Exception as e:
-        update.message.reply_text(f"❌ خطأ أثناء رفع الملف: {str(e)}")
+        update.message.reply_text(f"❌ حدث خطأ أثناء رفع الملف: {e}")
         return
 
     update.message.reply_text("⏳ جاري إرسال الملف للترجمة...")
@@ -94,8 +93,8 @@ def handle_document(update: Update, context: CallbackContext) -> None:
         pdf_file_request = groupdocs_translation_cloud.PdfFileRequest()
         pdf_file_request.sourceLanguage = "en"
         pdf_file_request.targetLanguages = ["ar"]
-        pdf_file_request.originalFileName = file.file_name  # اسم الملف الأصلي كما أُرسل من المستخدم
-        pdf_file_request.url = remote_file_path           # اسم الملف الذي رفعناه (يُستخدم مع التخزين الافتراضي)
+        pdf_file_request.originalFileName = file.file_name       # اسم الملف الأصلي كما أُرسل من المستخدم
+        pdf_file_request.url = remote_file_path                    # اسم الملف الذي رفعناه على التخزين
         pdf_file_request.origin = "Telegram"
         pdf_file_request.savingMode = "Files"
         pdf_file_request.outputFormat = "Pdf"
@@ -111,7 +110,7 @@ def handle_document(update: Update, context: CallbackContext) -> None:
         else:
             update.message.reply_text("✅ تمت الترجمة بنجاح!")
     except Exception as e:
-        update.message.reply_text(f"❌ حدث خطأ أثناء الترجمة: {str(e)}")
+        update.message.reply_text(f"❌ حدث خطأ أثناء الترجمة: {e}")
 
 # ==============================
 # تشغيل بوت تيليجرام
