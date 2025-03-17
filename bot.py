@@ -12,13 +12,8 @@ GROUPDOCS_CLIENT_SECRET = "20c8c4f0947d9901282ee3576ec31535"
 
 # 🔹 إعداد الـ API
 configuration = groupdocs_translation_cloud.Configuration()
-configuration.api_key["apiKey"] = GROUPDOCS_CLIENT_SECRET
-configuration.api_key["appSid"] = GROUPDOCS_CLIENT_ID
-
-# ✅ توليد رمز المصادقة (Access Token)
-auth_api = groupdocs_translation_cloud.AuthApi(groupdocs_translation_cloud.ApiClient(configuration))
-token_response = auth_api.get_access_token()
-configuration.access_token = token_response.access_token  # تخزين الـ access_token
+configuration.api_key["apiKey"] = GROUPDOCS_CLIENT_SECRET  # ✅ تصحيح المصادقة
+configuration.api_key["appSid"] = GROUPDOCS_CLIENT_ID  # ✅ إضافة appSid
 
 api_client = groupdocs_translation_cloud.ApiClient(configuration)
 api_instance = groupdocs_translation_cloud.TranslationApi(api_client)
@@ -59,8 +54,8 @@ def handle_document(update: Update, context: CallbackContext) -> None:
     request = groupdocs_translation_cloud.TextDocumentFileRequest(
         source_language="en",  # لغة المصدر
         target_languages=["ar"],  # اللغات المستهدفة
-        format="Docx",  # تصحيح الصيغة
-        output_format="Docx",  # صيغة الإخراج
+        format="Docx",  # ✅ تصحيح الصيغة
+        output_format="Docx",  # ✅ تصحيح الصيغة
         name=docx_path,
         folder="",
         savefile=f"translated_{file.file_id}.docx",
@@ -85,7 +80,7 @@ def handle_document(update: Update, context: CallbackContext) -> None:
 
         # 🔹 تحميل الملف المترجم
         translated_docx_path = f"translated_{file.file_id}.docx"
-        headers = {"Accept": "application/octet-stream"}  # قد تحتاج إلى ذلك لتنزيل الملف
+        headers = {"Accept": "application/octet-stream"}  # ✅ قد تحتاج إلى ذلك لتنزيل الملف
         response = requests.get(translated_doc_url, headers=headers)
         with open(translated_docx_path, "wb") as f:
             f.write(response.content)
