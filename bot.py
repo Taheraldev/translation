@@ -88,13 +88,15 @@ def handle_document(update: Update, context: CallbackContext) -> None:
     request = groupdocs_translation_cloud.TextDocumentFileRequest(
         sourceLanguage="en",
         targetLanguages=["ar"],
-        format="Docx",
+        format="Docx",  # ✅ تأكد أن الصيغة صحيحة
+        outputFormat="Docx",  # ✅ أضف هذا الحقل لمنع الخطأ
         name=docx_path,
         folder="",
         savefile=f"translated_{file.file_id}.docx",
         masters=False,
         elements=[]
     )
+
 
     # 🔹 إرسال الملف للترجمة
     try:
