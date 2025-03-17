@@ -1,133 +1,80 @@
-import logging
-import os
-import requests
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-from io import BytesIO
-from PyPDF2 import PdfReader
-import docx
-from pptx import Presentation
+import os
+import groupdocs_translation_cloud
+from pdf2docx import Converter
 
-# إعدادات API لـ Yandex Translate
-YANDEX_API_KEY = "2bbded23-5c80-4a79-8ea9-7928460acc41"
-YANDEX_TRANSLATE_URL = "https://translate.yandex.net/api/v1.5/tr.json/translate"
+# إعداد المصادقة الخاصة بـ GroupDocs API
+GROUPDOCS_CLIENT_ID = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
+GROUPDOCS_CLIENT_SECRET = "20c8c4f0947d9901282ee3576ec31535"
 
-# إعداد تسجيل الأخطاء
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
+configuration = groupdocs_translation_cloud.Configuration(
+    appSid=GROUPDOCS_CLIENT_ID,
+    apiKey=GROUPDOCS_CLIENT_SECRET
+)
+api_client = groupdocs_translation_cloud.ApiClient(configuration)
+api_instance = groupdocs_translation_cloud.TranslationApi(api_client)
 
-# دالة الترجمة (من الإنجليزية إلى العربية فقط)
-def translate_text(text: str) -> str:
-    params = {
-        "key": YANDEX_API_KEY,
-        "text": text,
-        "lang": "en-ar"  # الترجمة من الإنجليزية إلى العربية
-    }
-    try:
-        response = requests.get(YANDEX_TRANSLATE_URL, params=params)
-        response.raise_for_status()
-        result = response.json()
-        if "text" in result:
-            return "\n".join(result["text"])
-    except Exception as e:
-        logger.error(f"Error during translation: {e}")
-    return "حدث خطأ أثناء الترجمة."
+# دالة تحويل PDF إلى DOCX
+def convert_pdf_to_docx(pdf_path, docx_path):
+    cv = Converter(pdf_path)
+    cv.convert(docx_path, start=0, end=None)
+    cv.close()
 
-# استخراج النص من ملفات PDF
-def extract_text_pdf(file_bytes: BytesIO) -> str:
-    try:
-        reader = PdfReader(file_bytes)
-        text = ""
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text + "\n"
-        return text
-    except Exception as e:
-        logger.error(f"Error reading PDF: {e}")
-        return ""
-
-# استخراج النص من ملفات DOCX
-def extract_text_docx(file_bytes: BytesIO) -> str:
-    try:
-        document = docx.Document(file_bytes)
-        text = "\n".join([para.text for para in document.paragraphs])
-        return text
-    except Exception as e:
-        logger.error(f"Error reading DOCX: {e}")
-        return ""
-
-# استخراج النص من ملفات PPTX
-def extract_text_pptx(file_bytes: BytesIO) -> str:
-    try:
-        prs = Presentation(file_bytes)
-        text = ""
-        for slide in prs.slides:
-            for shape in slide.shapes:
-                if hasattr(shape, "text"):
-                    text += shape.text + "\n"
-        return text
-    except Exception as e:
-        logger.error(f"Error reading PPTX: {e}")
-        return ""
-
-# معالج أمر /start
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("مرحباً! أرسل لي ملف (PDF, DOCX, PPTX) وسأقوم بترجمته من الإنجليزية إلى العربية باستخدام Yandex Translate API.")
-
-# معالج استقبال الملفات
-def handle_file(update: Update, context: CallbackContext):
+# دالة استقبال ملفات PDF
+def handle_document(update: Update, context: CallbackContext) -> None:
     file = update.message.document
-    if not file:
-        update.message.reply_text("لم يتم العثور على ملف.")
+    if file.mime_type != "application/pdf":
+        update.message.reply_text("❌ الرجاء إرسال ملف PDF فقط.")
         return
 
-    file_name = file.file_name.lower()
-    if not (file_name.endswith('.pdf') or file_name.endswith('.docx') or file_name.endswith('.pptx')):
-        update.message.reply_text("صيغة الملف غير مدعومة. الرجاء إرسال ملف PDF, DOCX أو PPTX.")
-        return
+    file_path = f"{file.file_id}.pdf"
+    docx_path = f"{file.file_id}.docx"
 
-    # تنزيل الملف من تلغرام
-    file_id = file.file_id
-    new_file = context.bot.get_file(file_id)
-    file_bytes = BytesIO(new_file.download_as_bytearray())
+    # تحميل الملف
+    pdf_file = context.bot.get_file(file.file_id)
+    pdf_file.download(file_path)
 
-    # استخراج النص اعتمادًا على صيغة الملف
-    text = ""
-    if file_name.endswith('.pdf'):
-        text = extract_text_pdf(file_bytes)
-    elif file_name.endswith('.docx'):
-        text = extract_text_docx(file_bytes)
-    elif file_name.endswith('.pptx'):
-        text = extract_text_pptx(file_bytes)
+    # تحويل PDF إلى DOCX
+    convert_pdf_to_docx(file_path, docx_path)
 
-    if not text.strip():
-        update.message.reply_text("لم أتمكن من استخراج النص من الملف.")
-        return
+    # إعداد طلب الترجمة
+    request = groupdocs_translation_cloud.TextDocumentFileRequest(
+        pair="en-ar",
+        storage="First Storage",
+        name=docx_path,
+        savefile=f"translated_{file.file_id}.docx"
+    )
 
-    # ترجمة النص من الإنجليزية إلى العربية
-    translated_text = translate_text(text)
+    # إرسال الملف للترجمة
+    response = api_instance.document_post(request)
+    request_id = response.request_id
+    update.message.reply_text(f"⏳ يتم الآن ترجمة الملف... الرجاء الانتظار.")
 
-    # إرسال النص المترجم (أو ملف نصي إذا كان كبيرًا)
-    if len(translated_text) > 4000:
-        output_file = BytesIO(translated_text.encode('utf-8'))
-        output_file.name = "translated.txt"
-        update.message.reply_document(document=output_file)
-    else:
-        update.message.reply_text(translated_text)
+    # متابعة حالة الترجمة
+    translated_doc_url = None
+    while True:
+        status_response = api_instance.document_request_id_get(request_id)
+        if status_response.status == "Completed":
+            translated_doc_url = status_response.url
+            break
 
+    # تحميل وإرسال الملف المترجم
+    translated_docx_path = f"translated_{file.file_id}.docx"
+    os.system(f"wget -O {translated_docx_path} {translated_doc_url}")
+
+    update.message.reply_document(document=open(translated_docx_path, "rb"), filename="Translated.docx")
+
+# تشغيل البوت
 def main():
-    # ضع هنا رمز بوت تلغرام الخاص بك
-    TELEGRAM_BOT_TOKEN = "5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A"
-
-    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
+    TOKEN = "5146976580:AAFHTu1ZQQjVlKHtYY2V6L9sRu4QxrHaA2A"
+    updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.document, handle_file))
+    dp.add_handler(MessageHandler(Filters.document, handle_document))
 
     updater.start_polling()
     updater.idle()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
