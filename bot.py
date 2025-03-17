@@ -1,72 +1,24 @@
-import telegram
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+# Load the gem
 import groupdocs_translation_cloud
-from groupdocs_translation_cloud.models import PdfFileRequest
+# Get Client Id and Client Secret from https://dashboard.groupdocs.cloud
+my_client_id = "a91a6ad1-7637-4e65-b793-41af55450807"
+my_client_secret = "2d0c949f2cc2d12010f5427e6c1dc4da"
 
-# استبدل هذه القيم بالقيم الخاصة بك
-TELEGRAM_BOT_TOKEN = "5146976580:AAE2yXc-JK6MIHVlLDy-O4YODucS_u7Zq-8"
-GROUPDOCS_CLIENT_ID = "a91a6ad1-7637-4e65-b793-41af55450807"
-GROUPDOCS_CLIENT_SECRET = "2d0c949f2cc2d12010f5427e6c1dc4da"
+# Create instance of the API
+configuration = Configuration(apiKey=my_client_secret, appSid=my_client_id)
+api = TranslationApi(configuration)
 
-# تهيئة GroupDocs Translation Cloud
-configuration = groupdocs_translation_cloud.Configuration(client_id=GROUPDOCS_CLIENT_ID, client_secret=GROUPDOCS_CLIENT_SECRET)
-api_client = groupdocs_translation_cloud.ApiClient(configuration)
-translation_api = groupdocs_translation_cloud.TranslationApi(api_client)
-
-def start(update, context):
-    context.bot.send_message(chat_id=update.effective_chat.id, text="أرسل لي ملف PDF لترجمته من الإنجليزية إلى العربية.")
-
-def handle_document(update, context):
-    try:
-        print("تم استلام مستند.")  # طباعة عند استلام مستند
-        file_id = update.message.document.file_id
-        file_info = context.bot.get_file(file_id)
-        file_path = file_info.file_path
-        file_name = update.message.document.file_name
-
-        print(f"اسم الملف: {file_name}")  # طباعة اسم الملف
-
-        # تنزيل الملف
-        context.bot.send_message(chat_id=update.effective_chat.id, text="جاري تنزيل الملف...")
-        file = context.bot.get_file(file_id)
-        downloaded_file = file.download_as_bytearray()
-
-        print("تم تنزيل الملف.")  # طباعة بعد تنزيل الملف
-
-        # تهيئة طلب GroupDocs Translation Cloud
-        pdf_file_request = PdfFileRequest(
-            source_path=file_name,
-            source_language="en",
-            target_languages=["ar"],  # استخدام قائمة للغات الهدف
-            output_format="pdf"  # تحديد تنسيق الملف الناتج
-        )
-
-        # ترجمة الملف
-        context.bot.send_message(chat_id=update.effective_chat.id, text="جاري ترجمة الملف...")
-        translated_status = translation_api.pdf_post(pdf_file_request=pdf_file_request)
-
-        print("تمت ترجمة الملف.")  # طباعة بعد الترجمة
-        print(translated_status)  # طباعة محتوى الاستجابة
-
-        # استخراج الملف المترجم من الاستجابة (يجب تعديل هذا الجزء بناءً على بنية الاستجابة)
-        # translated_file_bytes = translated_status.result.read() # هذا الجزء غير صحيح الان
-
-        # إرسال الملف المترجم
-        # context.bot.send_document(chat_id=update.effective_chat.id, document=translated_file_bytes, filename=f"translated_{file_name}")
-
-    except Exception as e:
-        print(f"حدث خطأ: {e}")  # طباعة في حالة حدوث خطأ
-        context.bot.send_message(chat_id=update.effective_chat.id, text=f"حدث خطأ: {e}")
-
-def main():
-    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
-    dispatcher = updater.dispatcher
-
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(MessageHandler(Filters.document.mime_type("application/pdf"), handle_document))
-
-    updater.start_polling()
-    updater.idle()
-
-if __name__ == '__main__':
-    main()
+#document translation
+pair = "en-fr"
+_format = "docx"
+storage = "First Storage"
+name = "test.docx"
+folder = ""
+savepath = ""
+savefile = "test_python.docx"  
+masters = False
+elements = []
+translator = TranslateDocument(pair, _format, storage, name, folder, savepath, savefile, masters, elements)
+request = translator.to_string()
+res_doc = api.post_translate_document(request)
+print(res_doc.message)
