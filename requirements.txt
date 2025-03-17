@@ -1,3 +1,4 @@
-python-telegram-bot==13.15 
-python-docx 
-requests
+python-telegram-bot
+openai
+PyPDF2
+fpdf
