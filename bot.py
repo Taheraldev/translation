@@ -8,8 +8,9 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 # إعدادات API الخاصة بموقع otranslator.com
 API_KEY = "sk-32292721afeabc8a1f984e62dbc7f726aeab6e7c7b1547d0e1161f169971"
 TRANSLATION_ENDPOINT = "https://otranslator.com/api/v1/translate"  # تأكد من صحة الرابط حسب التوثيق
+BALANCE_ENDPOINT = "https://otranslator.com/api/v1/me"  # نقطة النهاية للتحقق من رصيد النقاط
 
-# رمز بوت تلغرام (قم بتعديله)
+# رمز بوت تلغرام (استبدله برمز البوت الخاص بك)
 TELEGRAM_BOT_TOKEN = "6016945663:AAHjacRdRfZ2vUgS2SLmoFgHfMdUye4l6bA"
 
 # إعداد سجل الأخطاء
@@ -22,10 +23,29 @@ logger = logging.getLogger(__name__)
 def start(update: Update, context: CallbackContext):
     update.message.reply_text("مرحباً! أرسل ملف DOCX وسأقوم بترجمته من الإنجليزية إلى العربية.")
 
+def check_credit_balance() -> int:
+    """
+    دالة للتحقق من رصيد النقاط باستخدام endpoint الخاص ب otranslator.com.
+    """
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
+    }
+    try:
+        response = requests.get(BALANCE_ENDPOINT, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("balance", 0)
+        else:
+            logger.error("خطأ في جلب رصيد النقاط: %s", response.text)
+            return 0
+    except Exception as e:
+        logger.error("Exception in checking credit balance: %s", e)
+        return 0
+
 def translate_text(text: str) -> str:
     """
-    الدالة ترسل النص إلى API الترجمة وتعيد النص المترجم.
-    تأكد من مطابقة المتغيرات حسب التوثيق الخاص بـ otranslator.com.
+    ترسل النص إلى واجهة API للترجمة وتعيد النص المترجم.
     """
     headers = {
         "Authorization": f"Bearer {API_KEY}",
@@ -42,10 +62,10 @@ def translate_text(text: str) -> str:
             data = response.json()
             return data.get("translated_text", "")
         else:
-            logger.error(f"خطأ في API الترجمة: {response.status_code} {response.text}")
+            logger.error("خطأ في API الترجمة: %s %s", response.status_code, response.text)
             return ""
     except Exception as e:
-        logger.error(f"Exception during translation: {e}")
+        logger.error("Exception during translation: %s", e)
         return ""
 
 def process_docx(file_path: str) -> str:
@@ -60,7 +80,7 @@ def process_docx(file_path: str) -> str:
 
 def create_docx(text: str, output_path: str):
     """
-    إنشاء ملف DOCX جديد يحتوي على النص المُترجم.
+    إنشاء ملف DOCX جديد يحتوي على النص المترجم.
     """
     doc = docx.Document()
     for line in text.splitlines():
@@ -76,6 +96,12 @@ def handle_document(update: Update, context: CallbackContext):
         file_path = os.path.join("downloads", document.file_name)
         file.download(custom_path=file_path)
         update.message.reply_text("تم استلام الملف. جاري عملية الترجمة...")
+
+        # التحقق من رصيد النقاط
+        balance = check_credit_balance()
+        if balance <= 0:
+            update.message.reply_text("رصيد النقاط غير كافٍ للترجمة. يرجى تعبئة الرصيد.")
+            return
 
         # استخراج النص من الملف
         original_text = process_docx(file_path)
