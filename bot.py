@@ -1,65 +1,54 @@
-import os
-import requests
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+import telegram
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+import groupdocs_translation_cloud
+from groupdocs_translation_cloud.models import PdfFileRequest
 
-# تعيين التوكن من متغير البيئة
-ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+# استبدل هذه القيم بالقيم الخاصة بك
+TELEGRAM_BOT_TOKEN = "5146976580:AAE2yXc-JK6MIHVlLDy-O4YODucS_u7Zq-8"
+GROUPDOCS_CLIENT_ID = "a91a6ad1-7637-4e65-b793-41af55450807"
+GROUPDOCS_CLIENT_SECRET = "2d0c949f2cc2d12010f5427e6c1dc4da"
 
-if not ACCESS_TOKEN:
-    raise ValueError("❌ خطأ: لم يتم العثور على ACCESS_TOKEN. تأكد من تعيينه بشكل صحيح!")
+# تهيئة GroupDocs Translation Cloud
+configuration = groupdocs_translation_cloud.Configuration(client_id=GROUPDOCS_CLIENT_ID, client_secret=GROUPDOCS_CLIENT_SECRET)
+api_client = groupdocs_translation_cloud.ApiClient(configuration)
+translation_api = groupdocs_translation_cloud.TranslationApi(api_client)
 
-# إعداد التوكن في الهيدرز
-headers = {
-    "Authorization": f"Bearer {ACCESS_TOKEN}".encode("utf-8", "ignore").decode("latin-1"),
-    "Accept": "application/json"
-}
+def start(update, context):
+    context.bot.send_message(chat_id=update.effective_chat.id, text="أرسل لي ملف PDF لترجمته من الإنجليزية إلى العربية.")
 
-API_URL = "https://api.groupdocs.cloud/v2.0/translation/pdf"
+def handle_document(update, context):
+    file_id = update.message.document.file_id
+    file_info = context.bot.get_file(file_id)
+    file_path = file_info.file_path
+    file_name = update.message.document.file_name
 
-# دالة الترجمة
+    # تنزيل الملف
+    context.bot.send_message(chat_id=update.effective_chat.id, text="جاري تنزيل الملف...")
+    file = context.bot.get_file(file_id)
+    downloaded_file = file.download_as_bytearray()
 
-def translate_pdf(file_path):
-    with open(file_path, "rb") as f:
-        files = {"file": f}
-        data = {
-            "sourceLanguage": "en",
-            "targetLanguages": ["ar"],
-            "outputFormat": "pdf"
-        }
-        
-        response = requests.post(API_URL, headers=headers, files=files, data=data)
-        
-        if response.status_code == 200:
-            translated_pdf_path = "translated.pdf"
-            with open(translated_pdf_path, "wb") as out_file:
-                out_file.write(response.content)
-            return translated_pdf_path
-        else:
-            print("❌ خطأ أثناء الترجمة:", response.text)
-            return None
+    # تهيئة طلب GroupDocs Translation Cloud
+    pdf_file_request = PdfFileRequest(source_path=file_name, source_language="en", target_language="ar")
 
-# دالة استقبال الملفات
+    try:
+        # ترجمة الملف
+        context.bot.send_message(chat_id=update.effective_chat.id, text="جاري ترجمة الملف...")
+        translated_file = translation_api.pdf_post(pdf_file_request=pdf_file_request)
 
-def handle_document(update: Update, context: CallbackContext):
-    file = update.message.document.get_file()
-    file_path = "received.pdf"
-    file.download(file_path)
-    
-    translated_file_path = translate_pdf(file_path)
-    if translated_file_path:
-        update.message.reply_document(document=open(translated_file_path, "rb"), caption="✅ تم الترجمة بنجاح!")
-    else:
-        update.message.reply_text("❌ حدث خطأ أثناء الترجمة.")
-
-# تشغيل البوت
+        # إرسال الملف المترجم
+        context.bot.send_document(chat_id=update.effective_chat.id, document=translated_file, filename=f"translated_{file_name}")
+    except Exception as e:
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f"حدث خطأ: {e}")
 
 def main():
-    updater = Updater("5146976580:AAE2yXc-JK6MIHVlLDy-O4YODucS_u7Zq-8", use_context=True)
-    dp = updater.dispatcher
-    dp.add_handler(MessageHandler(Filters.document.mime_type("application/pdf"), handle_document))
+    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
+    dispatcher = updater.dispatcher
+
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(MessageHandler(Filters.document.mime_type("application/pdf"), handle_document))
+
     updater.start_polling()
     updater.idle()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
