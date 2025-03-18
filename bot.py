@@ -11,10 +11,10 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import arabic_reshaper
 from bidi.algorithm import get_display
-from convertapi import ConvertApi
+import convertapi  # تعديل الاستيراد لاستخدام الإصدار 1.5.0
 
-# إعداد ConvertApi بمفتاحه السري
-ConvertApi.secret = 'secret_q4ijKpkWw17sLQx8'
+# تعيين المفتاح السري لمكتبة ConvertApi
+convertapi.api_secret = 'secret_q4ijKpkWw17sLQx8'
 
 # إعداد الـ logging لتتبع الأخطاء والعمليات
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -110,8 +110,7 @@ def perform_conversion(input_path, target_format):
     يُحدد اسم الملف الناتج بناءً على مسار الملف الأصلي.
     """
     output_path = input_path.rsplit('.', 1)[0] + f'_converted.{target_format}'
-    result = ConvertApi().convert(target_format, {'File': input_path})
-    # يتم حفظ الملف الناتج؛ اعتماداً على واجهة ConvertApi يمكن أن يكون save_files قادر على حفظ الملف مباشرة بالاسم المحدد
+    result = convertapi.convert(target_format, {'File': input_path})
     result.save_files(output_path)
     return output_path
 
