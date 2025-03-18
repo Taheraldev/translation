@@ -1,5 +1,4 @@
 python-telegram-bot
-openai
-PyPDF2
+pyreverso
+pymupdf
 fpdf
-python-dotenv
