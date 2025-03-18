@@ -105,6 +105,17 @@ def translate_pptx(file_path):
     prs.save(output_path)
     return output_path
 
+def start(update: Update, context: CallbackContext):
+    """رسالة الترحيب"""
+    help_text = (
+        "مرحبًا! أنا بوت متعدد المهام 🤖\n"
+        "يمكنني:\n"
+        "▫️ ترجمة DOCX/PPTX إلى العربية\n"
+        "▫️ تحويل الملفات بين الصيغ المختلفة\n"
+        "أرسل الملف وسأقوم بالمعالجة التلقائية!"
+    )
+    update.message.reply_text(help_text)
+
 def handle_document(update: Update, context: CallbackContext):
     """معالجة الملفات الواردة"""
     document = update.message.document
