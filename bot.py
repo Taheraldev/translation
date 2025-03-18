@@ -10,12 +10,8 @@ from googletrans import Translator
 import arabic_reshaper
 from bidi.algorithm import get_display
 
-# إعدادات معالجة النص العربي
-arabic_reshaper.config.update({
-    'use_unshaped_instead_of_isolated': True,
-    'delete_harakat': False,
-    'support_ligatures': True
-})
+# إعدادات معالجة النص العربي (طريقة جديدة)
+reshaper = arabic_reshaper.ArabicReshaper()
 
 # إعداد التسجيل
 logging.basicConfig(
@@ -28,7 +24,7 @@ translator = Translator()
 
 def fix_arabic(text):
     """معالجة النص العربي مع الحفاظ على التنسيق"""
-    reshaped = arabic_reshaper.reshape(text)
+    reshaped = reshaper.reshape(text)
     return get_display(reshaped)
 
 def translate_docx(input_path, output_path):
