@@ -12,16 +12,20 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 
 # إعداد الـ logging لتتبع الأخطاء والعمليات
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 # تهيئة المترجم
 translator = Translator()
 
-# إعداد تكوين مخصص لمكتبة arabic_reshaper
-arabic_config = arabic_reshaper.get_default_config()
-arabic_config.delete_harakat = True      # حذف الحركات لتقليل التشويه
-arabic_config.support_ligatures = True    # دعم الربط بين الحروف
+# إعداد التكوين الخاص بمكتبة arabic_reshaper باستخدام قاموس إعدادات
+arabic_config = {
+    'delete_harakat': True,      # حذف الحركات لتقليل التشويه
+    'support_ligatures': True     # دعم الربط بين الحروف
+}
 
 def set_paragraph_rtl(paragraph):
     """
@@ -38,8 +42,8 @@ def set_paragraph_rtl(paragraph):
 
 def process_arabic_text(text):
     """
-    تعالج النص العربي باستخدام arabic_reshaper مع إعدادات مُخصصة
-    ثم تُعيد النص مع عرض صحيح باستخدام python-bidi.
+    تعالج النص العربي باستخدام arabic_reshaper مع إعدادات مخصصة ثم تُعيد النص 
+    مع عرض صحيح باستخدام python-bidi.
     """
     reshaped_text = arabic_reshaper.reshape(text, configuration=arabic_config)
     bidi_text = get_display(reshaped_text)
