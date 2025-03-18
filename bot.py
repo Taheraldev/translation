@@ -1,71 +1,117 @@
 import os
-import fitz  # PyMuPDF
+import tempfile
 import logging
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-from pyreverso import Reverso
-from fpdf import FPDF
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram import ChatAction
+import docx
+from pptx import Presentation
+from googletrans import Translator
 
-# إعداد سجل الأخطاء
+# إعداد الـ logging (اختياري)
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# استبدل هذا بالتوكن الخاص بك من بوت فاذر
-TELEGRAM_BOT_TOKEN = "6016945663:AAHjacRdRfZ2vUgS2SLmoFgHfMdUye4l6bA"
+# تهيئة المترجم (يمكن استخدام API رسمي إذا لزم الأمر)
+translator = Translator()
 
-# استخراج النص من PDF
-def extract_text_from_pdf(pdf_path):
-    doc = fitz.open(pdf_path)
-    text = "\n".join([page.get_text("text") for page in doc])
-    return text
+def translate_docx(file_path):
+    """
+    تفتح ملف DOCX وتترجم محتواه على مستوى كل run للحفاظ على التنسيق.
+    """
+    doc = docx.Document(file_path)
+    for para in doc.paragraphs:
+        for run in para.runs:
+            if run.text.strip():
+                try:
+                    translated = translator.translate(run.text, src='en', dest='ar')
+                    run.text = translated.text
+                except Exception as e:
+                    logger.error(f"خطأ أثناء ترجمة نص: {run.text}. الخطأ: {e}")
+    output_path = file_path.replace('.docx', '_translated.docx')
+    doc.save(output_path)
+    return output_path
 
-# ترجمة النص باستخدام Reverso
-def translate_text(text, source_lang="en", target_lang="ar"):
-    reverso = Reverso(text, source_lang, target_lang)
-    translations = reverso.get_translation()
-    return " ".join(translations)
+def translate_pptx(file_path):
+    """
+    تفتح ملف PPTX وتترجم محتوى الشرائح.
+    """
+    prs = Presentation(file_path)
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if hasattr(shape, "text_frame") and shape.text_frame is not None:
+                for paragraph in shape.text_frame.paragraphs:
+                    for run in paragraph.runs:
+                        if run.text.strip():
+                            try:
+                                translated = translator.translate(run.text, src='en', dest='ar')
+                                run.text = translated.text
+                            except Exception as e:
+                                logger.error(f"خطأ أثناء ترجمة نص: {run.text}. الخطأ: {e}")
+    output_path = file_path.replace('.pptx', '_translated.pptx')
+    prs.save(output_path)
+    return output_path
 
-# إنشاء PDF جديد مع النص المترجم
-def create_translated_pdf(translated_text, output_path):
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.multi_cell(0, 10, translated_text)
-    pdf.output(output_path)
+def start(update, context):
+    update.message.reply_text("مرحباً! أرسل لي ملفاً بصيغة DOCX أو PPTX (أو ملفات DOC/PPT بعد تحويلها) لأقوم بترجمته من الإنجليزية إلى العربية.")
 
-# التعامل مع استلام الملفات
-async def handle_document(update: Update, context: CallbackContext) -> None:
-    file = await update.message.document.get_file()
-    file_path = f"downloads/{file.file_id}.pdf"
-    os.makedirs("downloads", exist_ok=True)
-    await file.download_to_drive(file_path)
+def handle_file(update, context):
+    document = update.message.document
+    filename = document.file_name.lower()
+    file_path = os.path.join(tempfile.gettempdir(), filename)
     
-    update.message.reply_text("جارٍ استخراج النص من الملف...")
-    extracted_text = extract_text_from_pdf(file_path)
+    # تنزيل الملف
+    file = context.bot.getFile(document.file_id)
+    file.download(custom_path=file_path)
     
-    update.message.reply_text("جارٍ الترجمة، يرجى الانتظار...")
-    translated_text = translate_text(extracted_text)
+    update.message.reply_text("جاري معالجة الملف وترجمته، يرجى الانتظار...")
     
-    output_path = file_path.replace(".pdf", "_translated.pdf")
-    create_translated_pdf(translated_text, output_path)
-    
-    with open(output_path, "rb") as pdf_file:
-        await update.message.reply_document(document=pdf_file, filename="translated.pdf")
-    
-    os.remove(file_path)
-    os.remove(output_path)
+    translated_path = None
+    try:
+        if filename.endswith('.docx'):
+            translated_path = translate_docx(file_path)
+        elif filename.endswith('.pptx'):
+            translated_path = translate_pptx(file_path)
+        elif filename.endswith('.doc'):
+            update.message.reply_text("صيغة DOC غير مدعومة مباشرة. يرجى تحويل الملف إلى DOCX أولاً (يمكن استخدام LibreOffice للتحويل).")
+            return
+        elif filename.endswith('.ppt'):
+            update.message.reply_text("صيغة PPT غير مدعومة مباشرة. يرجى تحويل الملف إلى PPTX أولاً (يمكن استخدام LibreOffice للتحويل).")
+            return
+        else:
+            update.message.reply_text("صيغة الملف غير مدعومة. الرجاء إرسال ملف بصيغة DOCX أو PPTX.")
+            return
+        
+        # إرسال الملف المترجم للمستخدم
+        context.bot.send_document(chat_id=update.message.chat_id, document=open(translated_path, 'rb'))
+    except Exception as e:
+        logger.error(f"حدث خطأ أثناء ترجمة الملف: {e}")
+        update.message.reply_text("حدث خطأ أثناء ترجمة الملف. الرجاء المحاولة مرة أخرى.")
+    finally:
+        # تنظيف الملفات المؤقتة
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            if translated_path and os.path.exists(translated_path):
+                os.remove(translated_path)
+        except Exception as cleanup_error:
+            logger.warning(f"خطأ أثناء حذف الملفات المؤقتة: {cleanup_error}")
 
-# بدء البوت
-async def start(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text("مرحبًا! أرسل لي ملف PDF وسأقوم بترجمته لك من الإنجليزية إلى العربية.")
+def main():
+    # ضع توكن البوت الخاص بك هنا
+    TOKEN = "6016945663:AAHjacRdRfZ2vUgS2SLmoFgHfMdUye4l6bA"
+    
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-if __name__ == "__main__":
-    from telegram.ext import ApplicationBuilder
+    # أوامر البوت
+    dp.add_handler(CommandHandler("start", start))
     
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(Filters.document.mime_type("application/pdf"), handle_document))
+    # التعامل مع الملفات المرسلة
+    dp.add_handler(MessageHandler(Filters.document, handle_file))
     
-    print("🤖 البوت يعمل... انتظر الرسائل!")
-    app.run_polling()
+    # بدء البوت
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
