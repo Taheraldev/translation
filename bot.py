@@ -46,9 +46,10 @@ def translate_docx(file_path):
                         if run.text.strip():
                             run.text = translate_text(run.text)
     
-    # ترجمة النص داخل مربعات النصوص باستخدام XPath مع تحديد الـ namespace
+    # ترجمة النص داخل مربعات النصوص:
+    # الحصول على شجرة XML الأصلية لتفادي مشكلة تمرير معلمة "namespaces"
     namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
-    txbx_contents = doc.element.xpath('//w:txbxContent', namespaces=namespaces)
+    txbx_contents = doc.element.getroottree().xpath('//w:txbxContent', namespaces=namespaces)
     for txbx in txbx_contents:
         paragraphs = txbx.xpath('.//w:p', namespaces=namespaces)
         for p in paragraphs:
