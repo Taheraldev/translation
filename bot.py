@@ -10,7 +10,7 @@ from googletrans import Translator
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# تهيئة المترجم (يمكنكم استبداله بخدمة ترجمة مدفوعة للحصول على دقة أعلى)
+# تهيئة المترجم (يمكن استبداله بخدمة ترجمة مدفوعة للحصول على دقة أعلى)
 translator = Translator()
 
 def translate_text(text):
@@ -25,9 +25,9 @@ def translate_text(text):
 def translate_docx(file_path):
     """
     تفتح هذه الدالة ملف DOCX وترجم النصوص الموجودة في:
-    - الفقرات العادية.
-    - النص داخل خلايا الجداول.
-    - النص داخل مربعات النصوص.
+    - الفقرات العادية خارج الجداول.
+    - النصوص داخل خلايا الجداول.
+    - النصوص داخل مربعات النصوص.
     """
     doc = docx.Document(file_path)
     
@@ -46,8 +46,8 @@ def translate_docx(file_path):
                         if run.text.strip():
                             run.text = translate_text(run.text)
     
-    # ترجمة النص داخل مربعات النصوص:
-    # الحصول على شجرة XML الأصلية لتفادي مشكلة تمرير معلمة "namespaces"
+    # ترجمة النصوص داخل مربعات النصوص:
+    # نحصل على شجرة XML الأصلية ثم نستخدم XPath مع تحديد النطاق المناسب
     namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
     txbx_contents = doc.element.getroottree().xpath('//w:txbxContent', namespaces=namespaces)
     for txbx in txbx_contents:
