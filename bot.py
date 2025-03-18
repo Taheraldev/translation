@@ -10,7 +10,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import arabic_reshaper
 from bidi.algorithm import get_display
-import convertapi  # استيراد مكتبة convertapi بالإصدار 1.5.0
+import convertapi  # إصدار convertapi==1.5.0
 
 # إعداد الـ logging لتتبع الأخطاء والعمليات
 logging.basicConfig(
@@ -18,7 +18,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# إعداد ConvertAPI بالمفتاح السري لإصدار 1.5.0
+# إعداد ConvertAPI بالمفتاح السري
 convertapi.api_secret = 'secret_q4ijKpkWw17sLQx8'
 
 # تهيئة المترجم (يمكن استبداله بخدمة ترجمة مدفوعة للحصول على دقة أعلى)
@@ -39,10 +39,11 @@ def set_paragraph_rtl(paragraph):
 
 def process_arabic_text(text):
     """
-    تعالج النص العربي باستخدام arabic_reshaper و python-bidi
-    لتظهر الحروف بشكل صحيح.
+    تعالج النص العربي باستخدام arabic_reshaper و python-bidi لتظهر الحروف بشكل صحيح.
+    كما تقوم بإزالة الفراغات الزائدة.
     """
-    reshaped_text = arabic_reshaper.reshape(text)
+    cleaned_text = " ".join(text.split())
+    reshaped_text = arabic_reshaper.reshape(cleaned_text)
     bidi_text = get_display(reshaped_text)
     return bidi_text
 
