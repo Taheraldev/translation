@@ -1,9 +1,8 @@
+You said:
 import os
 import tempfile
 import logging
-import convertapi
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import docx
 from pptx import Presentation
 from pptx.enum.text import PP_ALIGN
@@ -12,26 +11,18 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import arabic_reshaper
 from bidi.algorithm import get_display
-from fpdf import FPDF  # إضافة مكتبة FPDF لإنشاء PDF يدويًا
 
-# إعدادات ConvertAPI
-convertapi.api_secret = 'secret_q4ijKpkWw17sLQx8'  # استبدال بالمفتاح الخاص بك
-
-# إعدادات الترجمة
-translator = Translator()
-
-# إعدادات البوت
-TOKEN = "5146976580:AAE2yXc-JK6MIHVlLDy-O4YODucS_u7Zq-8"
-
-# إعداد الـ logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+# إعداد الـ logging لتتبع الأخطاء والعمليات
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# تهيئة المترجم (يمكنكم استبداله بخدمة ترجمة مدفوعة للحصول على دقة أعلى)
+translator = Translator()
+
 def set_paragraph_rtl(paragraph):
-    """تعديل اتجاه الفقرة لليمين-لليسار"""
+    """
+    تضيف هذه الدالة عنصر XML يُحدد أن الفقرة يجب أن تُعرض من اليمين لليسار.
+    """
     p = paragraph._p
     pPr = p.find(qn('w:pPr'))
     if pPr is None:
@@ -42,33 +33,37 @@ def set_paragraph_rtl(paragraph):
     pPr.append(bidi)
 
 def process_arabic_text(text):
-    """معالجة النص العربي للتنسيق الصحيح"""
+    """
+    تعالج النص العربي باستخدام arabic_reshaper و python-bidi
+    لتظهر الحروف بشكل صحيح.
+    """
     reshaped_text = arabic_reshaper.reshape(text)
-    return get_display(reshaped_text)
-
-def create_pdf_from_text(text, output_path):
-    """إنشاء ملف PDF يدويًا مع معالجة النصوص العربية"""
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)  # تأكد من وجود خط يدعم العربية
-    pdf.set_font('DejaVu', '', 12)
-    pdf.multi_cell(0, 10, txt=text, align='R')  # محاذاة النص لليمين
-    pdf.output(output_path)
+    bidi_text = get_display(reshaped_text)
+    return bidi_text
 
 def translate_docx(file_path):
-    """ترجمة ملفات DOCX مع الحفاظ على التنسيق"""
+    """
+    تقوم هذه الدالة بفتح ملف DOCX وترجمة النصوص الموجودة في:
+    - الفقرات العادية خارج الجداول.
+    - النصوص داخل خلايا الجداول.
+    كما تضبط اتجاه النص ليكون من اليمين لليسار وتستخدم مكتبات معالجة النص العربي.
+    """
     doc = docx.Document(file_path)
     
+    # ترجمة الفقرات العادية
     for para in doc.paragraphs:
         for run in para.runs:
             if run.text.strip():
                 try:
                     translated = translator.translate(run.text, src='en', dest='ar')
+                    # معالجة النص العربي
                     run.text = process_arabic_text(translated.text)
                 except Exception as e:
-                    logger.error(f"Translation error: {e}")
+                    logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
+        # ضبط اتجاه الفقرة لتكون من اليمين لليسار
         set_paragraph_rtl(para)
     
+    # ترجمة النصوص داخل الجداول
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
@@ -79,7 +74,8 @@ def translate_docx(file_path):
                                 translated = translator.translate(run.text, src='en', dest='ar')
                                 run.text = process_arabic_text(translated.text)
                             except Exception as e:
-                                logger.error(f"Translation error: {e}")
+                                logger.error(f"خطأ أثناء ترجمة النص داخل الجدول: {run.text}. الخطأ: {e}")
+                    # ضبط اتجاه الفقرة داخل الخلية
                     set_paragraph_rtl(para)
     
     output_path = file_path.replace('.docx', '_translated.docx')
@@ -87,12 +83,16 @@ def translate_docx(file_path):
     return output_path
 
 def translate_pptx(file_path):
-    """ترجمة ملفات PPTX مع الحفاظ على التنسيق"""
+    """
+    تقوم هذه الدالة بفتح ملف PPTX وترجمة النصوص الموجودة داخل الشرائح.
+    كما تقوم بمحاولة ضبط محاذاة النص إلى اليمين واستخدام مكتبات معالجة النص العربي.
+    """
     prs = Presentation(file_path)
     for slide in prs.slides:
         for shape in slide.shapes:
-            if hasattr(shape, "text_frame"):
+            if hasattr(shape, "text_frame") and shape.text_frame is not None:
                 for paragraph in shape.text_frame.paragraphs:
+                    # ضبط محاذاة النص إلى اليمين
                     paragraph.alignment = PP_ALIGN.RIGHT
                     for run in paragraph.runs:
                         if run.text.strip():
@@ -100,119 +100,74 @@ def translate_pptx(file_path):
                                 translated = translator.translate(run.text, src='en', dest='ar')
                                 run.text = process_arabic_text(translated.text)
                             except Exception as e:
-                                logger.error(f"Translation error: {e}")
+                                logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
     output_path = file_path.replace('.pptx', '_translated.pptx')
     prs.save(output_path)
     return output_path
 
-def start(update: Update, context: CallbackContext):
-    """رسالة الترحيب"""
-    help_text = (
-        "مرحبًا! أنا بوت متعدد المهام 🤖\n"
-        "يمكنني:\n"
-        "▫️ ترجمة DOCX/PPTX إلى العربية\n"
-        "▫️ تحويل الملفات بين الصيغ المختلفة\n"
-        "أرسل الملف وسأقوم بالمعالجة التلقائية!"
+def start(update, context):
+    update.message.reply_text(
+        "مرحباً! أرسل لي ملفاً بصيغة DOCX أو PPTX (أو ملفات DOC/PPT بعد تحويلها) لأقوم بترجمته من الإنجليزية إلى العربية."
     )
-    update.message.reply_text(help_text)
 
-def handle_document(update: Update, context: CallbackContext):
-    """معالجة الملفات الواردة"""
+def handle_file(update, context):
     document = update.message.document
-    mime_type = document.mime_type
-    file_id = document.file_id
     filename = document.file_name.lower()
-    temp_files = []
-
+    file_path = os.path.join(tempfile.gettempdir(), filename)
+    
+    # تنزيل الملف المرسل إلى مسار مؤقت
+    file = context.bot.getFile(document.file_id)
+    file.download(custom_path=file_path)
+    
+    update.message.reply_text("جاري معالجة الملف وترجمته، يرجى الانتظار...")
+    
+    translated_path = None
     try:
-        # تنزيل الملف
-        file = context.bot.get_file(file_id)
-        temp_dir = tempfile.gettempdir()
-        input_path = os.path.join(temp_dir, filename)
-        file.download(custom_path=input_path)
-        temp_files.append(input_path)
-
-        # تحديد نوع المعالجة
-        if mime_type in [
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-        ]:
-            # ترجمة الملف
-            if 'word' in mime_type:
-                translated_path = translate_docx(input_path)
-                target_format = 'docx'
-            else:
-                translated_path = translate_pptx(input_path)
-                target_format = 'pptx'
-            temp_files.append(translated_path)
-
-            # إنشاء PDF يدويًا
-            output_pdf = translated_path.replace(f'_{target_format}', '_converted.pdf')
-            if target_format == 'docx':
-                doc = docx.Document(translated_path)
-                full_text = "\n".join([para.text for para in doc.paragraphs])
-            else:
-                prs = Presentation(translated_path)
-                full_text = "\n".join([shape.text for slide in prs.slides for shape in slide.shapes if hasattr(shape, "text")])
-            
-            create_pdf_from_text(full_text, output_pdf)
-            temp_files.append(output_pdf)
-
-            # إرسال النتائج
-            update.message.reply_document(document=open(translated_path, 'rb'), caption="📄 الملف المترجم")
-            update.message.reply_document(document=open(output_pdf, 'rb'), caption="🖨️ النسخة PDF")
-
-        elif mime_type == 'application/pdf':
-            # تحويل PDF إلى DOCX
-            converted_docx = input_path.replace('.pdf', '_converted.docx')
-            convertapi.convert(
-                'docx',
-                {'File': input_path},
-                from_format='pdf'
-            ).save_files(converted_docx)
-            temp_files.append(converted_docx)
-
-            # ترجمة DOCX
-            translated_docx = translate_docx(converted_docx)
-            temp_files.append(translated_docx)
-
-            # إنشاء PDF يدويًا
-            translated_pdf = translated_docx.replace('.docx', '_converted.pdf')
-            doc = docx.Document(translated_docx)
-            full_text = "\n".join([para.text for para in doc.paragraphs])
-            create_pdf_from_text(full_text, translated_pdf)
-            temp_files.append(translated_pdf)
-
-            # إرسال النتائج
-            update.message.reply_document(document=open(translated_docx, 'rb'), caption="📄 DOCX المترجم")
-            update.message.reply_document(document=open(translated_pdf, 'rb'), caption="🖨️ PDF المترجم")
-
-        elif mime_type in ['application/msword', 'application/vnd.ms-powerpoint']:
-            update.message.reply_text("⚠️ الرجاء تحويل الملف إلى DOCX/PPTX أولاً (استخدم LibreOffice).")
-
+        if filename.endswith('.docx'):
+            translated_path = translate_docx(file_path)
+        elif filename.endswith('.pptx'):
+            translated_path = translate_pptx(file_path)
+        elif filename.endswith('.doc'):
+            update.message.reply_text(
+                "صيغة DOC غير مدعومة مباشرة. الرجاء تحويل الملف إلى DOCX أولاً (يمكن استخدام LibreOffice للتحويل)."
+            )
+            return
+        elif filename.endswith('.ppt'):
+            update.message.reply_text(
+                "صيغة PPT غير مدعومة مباشرة. الرجاء تحويل الملف إلى PPTX أولاً (يمكن استخدام LibreOffice للتحويل)."
+            )
+            return
         else:
-            update.message.reply_text("❌ الصيغة غير مدعومة!")
-
+            update.message.reply_text("صيغة الملف غير مدعومة. الرجاء إرسال ملف بصيغة DOCX أو PPTX.")
+            return
+        
+        # إرسال الملف المترجم للمستخدم
+        context.bot.send_document(chat_id=update.message.chat_id, document=open(translated_path, 'rb'))
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        update.message.reply_text("❌ فشلت العملية! تأكد من صحة الملف.")
+        logger.error(f"حدث خطأ أثناء ترجمة الملف: {e}")
+        update.message.reply_text("حدث خطأ أثناء ترجمة الملف. الرجاء المحاولة مرة أخرى.")
     finally:
-        # تنظيف الملفات المؤقتة
-        for path in temp_files:
-            try:
-                if os.path.exists(path):
-                    os.remove(path)
-            except Exception as e:
-                logger.warning(f"Error deleting {path}: {e}")
+        # حذف الملفات المؤقتة
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            if translated_path and os.path.exists(translated_path):
+                os.remove(translated_path)
+        except Exception as cleanup_error:
+            logger.warning(f"خطأ أثناء حذف الملفات المؤقتة: {cleanup_error}")
 
 def main():
-    """تشغيل البوت"""
+    # ضع توكن البوت الخاص بك هنا
+    TOKEN = "5146976580:AAE2yXc-JK6MIHVlLDy-O4YODucS_u7Zq-8"
+    
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
 
+    # إعداد الأوامر والرسائل
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.document, handle_document))
-
+    dp.add_handler(MessageHandler(Filters.document, handle_file))
+    
+    # بدء البوت
     updater.start_polling()
     updater.idle()
 
