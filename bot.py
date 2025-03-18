@@ -18,10 +18,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# تهيئة المترجم
+# تهيئة المترجم (يفضل استخدام googletrans==4.0.0-rc1)
 translator = Translator()
 
-# إعداد التكوين الخاص بمكتبة arabic_reshaper باستخدام قاموس إعدادات
+# إعداد إعدادات مكتبة arabic_reshaper كقاموس
 arabic_config = {
     'delete_harakat': True,      # حذف الحركات لتقليل التشويه
     'support_ligatures': True     # دعم الربط بين الحروف
@@ -29,7 +29,7 @@ arabic_config = {
 
 def set_paragraph_rtl(paragraph):
     """
-    تضيف هذه الدالة عنصر XML يُحدد أن الفقرة يجب أن تُعرض من اليمين لليسار.
+    تضيف هذه الدالة عنصر XML لتعيين اتجاه الفقرة من اليمين إلى اليسار.
     """
     p = paragraph._p
     pPr = p.find(qn('w:pPr'))
@@ -42,8 +42,8 @@ def set_paragraph_rtl(paragraph):
 
 def process_arabic_text(text):
     """
-    تعالج النص العربي باستخدام arabic_reshaper مع إعدادات مخصصة ثم تُعيد النص 
-    مع عرض صحيح باستخدام python-bidi.
+    تعالج النص العربي باستخدام arabic_reshaper مع إعدادات مخصصة ثم تُعيد النص
+    مع عرض صحيح باستخدام مكتبة python-bidi.
     """
     reshaped_text = arabic_reshaper.reshape(text, configuration=arabic_config)
     bidi_text = get_display(reshaped_text)
@@ -51,10 +51,8 @@ def process_arabic_text(text):
 
 def translate_docx(file_path):
     """
-    تقوم هذه الدالة بفتح ملف DOCX وترجمة النصوص الموجودة في:
-    - الفقرات العادية خارج الجداول.
-    - النصوص داخل خلايا الجداول.
-    كما تضبط اتجاه النص ليكون من اليمين لليسار.
+    تفتح هذه الدالة ملف DOCX وتترجم النصوص الموجودة فيه، مع عرض سجلات 
+    لكل جزء يتم ترجمته.
     """
     doc = docx.Document(file_path)
     
@@ -62,11 +60,13 @@ def translate_docx(file_path):
     for para in doc.paragraphs:
         for run in para.runs:
             if run.text.strip():
+                original = run.text
                 try:
-                    translated = translator.translate(run.text, src='en', dest='ar')
+                    translated = translator.translate(original, src='en', dest='ar')
+                    logger.info(f"Original: {original} | Translated: {translated.text}")
                     run.text = process_arabic_text(translated.text)
                 except Exception as e:
-                    logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
+                    logger.error(f"خطأ أثناء ترجمة النص: {original}. الخطأ: {e}")
         set_paragraph_rtl(para)
     
     # ترجمة النصوص داخل الجداول
@@ -76,11 +76,13 @@ def translate_docx(file_path):
                 for para in cell.paragraphs:
                     for run in para.runs:
                         if run.text.strip():
+                            original = run.text
                             try:
-                                translated = translator.translate(run.text, src='en', dest='ar')
+                                translated = translator.translate(original, src='en', dest='ar')
+                                logger.info(f"Original: {original} | Translated: {translated.text}")
                                 run.text = process_arabic_text(translated.text)
                             except Exception as e:
-                                logger.error(f"خطأ أثناء ترجمة النص داخل الجدول: {run.text}. الخطأ: {e}")
+                                logger.error(f"خطأ أثناء ترجمة النص داخل الجدول: {original}. الخطأ: {e}")
                     set_paragraph_rtl(para)
     
     output_path = file_path.replace('.docx', '_translated.docx')
@@ -89,8 +91,8 @@ def translate_docx(file_path):
 
 def translate_pptx(file_path):
     """
-    تقوم هذه الدالة بفتح ملف PPTX وترجمة النصوص الموجودة داخل الشرائح.
-    كما تقوم بضبط محاذاة النص إلى اليمين.
+    تفتح هذه الدالة ملف PPTX وتترجم النصوص الموجودة في الشرائح، مع ضبط
+    محاذاة النص إلى اليمين وإضافة سجلات لكل ترجمة.
     """
     prs = Presentation(file_path)
     for slide in prs.slides:
@@ -100,11 +102,13 @@ def translate_pptx(file_path):
                     paragraph.alignment = PP_ALIGN.RIGHT
                     for run in paragraph.runs:
                         if run.text.strip():
+                            original = run.text
                             try:
-                                translated = translator.translate(run.text, src='en', dest='ar')
+                                translated = translator.translate(original, src='en', dest='ar')
+                                logger.info(f"Original: {original} | Translated: {translated.text}")
                                 run.text = process_arabic_text(translated.text)
                             except Exception as e:
-                                logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
+                                logger.error(f"خطأ أثناء ترجمة النص: {original}. الخطأ: {e}")
     output_path = file_path.replace('.pptx', '_translated.pptx')
     prs.save(output_path)
     return output_path
@@ -133,12 +137,12 @@ def handle_file(update, context):
             translated_path = translate_pptx(file_path)
         elif filename.endswith('.doc'):
             update.message.reply_text(
-                "صيغة DOC غير مدعومة مباشرة. الرجاء تحويل الملف إلى DOCX أولاً (يمكن استخدام LibreOffice للتحويل)."
+                "صيغة DOC غير مدعومة مباشرة. الرجاء تحويل الملف إلى DOCX أولاً."
             )
             return
         elif filename.endswith('.ppt'):
             update.message.reply_text(
-                "صيغة PPT غير مدعومة مباشرة. الرجاء تحويل الملف إلى PPTX أولاً (يمكن استخدام LibreOffice للتحويل)."
+                "صيغة PPT غير مدعومة مباشرة. الرجاء تحويل الملف إلى PPTX أولاً."
             )
             return
         else:
@@ -167,11 +171,9 @@ def main():
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
 
-    # إعداد الأوامر والرسائل
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(MessageHandler(Filters.document, handle_file))
     
-    # بدء البوت
     updater.start_polling()
     updater.idle()
 
