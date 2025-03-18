@@ -5,7 +5,6 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import docx
 from pptx import Presentation
 from googletrans import Translator
-from docx.oxml.ns import qn
 
 # إعداد الـ logging لتتبع الأخطاء والعمليات
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -47,15 +46,15 @@ def translate_docx(file_path):
                         if run.text.strip():
                             run.text = translate_text(run.text)
     
-    # ترجمة النص داخل مربعات النصوص باستخدام الوصول لعناصر XML مباشرةً
-    # عناصر مربعات النص تكون ضمن <w:txbxContent>
-    txbx_contents = doc.element.xpath('//w:txbxContent')
+    # ترجمة النص داخل مربعات النصوص باستخدام XPath مع تحديد الـ namespace
+    namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+    txbx_contents = doc.element.xpath('//w:txbxContent', namespaces=namespaces)
     for txbx in txbx_contents:
-        paragraphs = txbx.xpath('.//w:p')
+        paragraphs = txbx.xpath('.//w:p', namespaces=namespaces)
         for p in paragraphs:
-            runs = p.xpath('.//w:r')
+            runs = p.xpath('.//w:r', namespaces=namespaces)
             for r in runs:
-                text_elems = r.xpath('.//w:t')
+                text_elems = r.xpath('.//w:t', namespaces=namespaces)
                 for t in text_elems:
                     if t.text and t.text.strip():
                         t.text = translate_text(t.text)
@@ -67,7 +66,6 @@ def translate_docx(file_path):
 def translate_pptx(file_path):
     """
     تفتح هذه الدالة ملف PPTX وترجم النصوص الموجودة داخل الشرائح.
-    عادةً، مربعات النصوص في ملفات PPTX تظهر كـ shapes مع text_frame.
     """
     prs = Presentation(file_path)
     for slide in prs.slides:
