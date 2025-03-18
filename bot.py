@@ -12,6 +12,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import arabic_reshaper
 from bidi.algorithm import get_display
+from fpdf import FPDF  # إضافة مكتبة FPDF لإنشاء PDF يدويًا
 
 # إعدادات ConvertAPI
 convertapi.api_secret = 'secret_q4ijKpkWw17sLQx8'  # استبدال بالمفتاح الخاص بك
@@ -44,6 +45,15 @@ def process_arabic_text(text):
     """معالجة النص العربي للتنسيق الصحيح"""
     reshaped_text = arabic_reshaper.reshape(text)
     return get_display(reshaped_text)
+
+def create_pdf_from_text(text, output_path):
+    """إنشاء ملف PDF يدويًا مع معالجة النصوص العربية"""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)  # تأكد من وجود خط يدعم العربية
+    pdf.set_font('DejaVu', '', 12)
+    pdf.multi_cell(0, 10, txt=text, align='R')  # محاذاة النص لليمين
+    pdf.output(output_path)
 
 def translate_docx(file_path):
     """ترجمة ملفات DOCX مع الحفاظ على التنسيق"""
@@ -95,17 +105,6 @@ def translate_pptx(file_path):
     prs.save(output_path)
     return output_path
 
-def start(update: Update, context: CallbackContext):
-    """رسالة الترحيب"""
-    help_text = (
-        "مرحبًا! أنا بوت متعدد المهام 🤖\n"
-        "يمكنني:\n"
-        "▫️ ترجمة DOCX/PPTX إلى العربية\n"
-        "▫️ تحويل الملفات بين الصيغ المختلفة\n"
-        "أرسل الملف وسأقوم بالمعالجة التلقائية!"
-    )
-    update.message.reply_text(help_text)
-
 def handle_document(update: Update, context: CallbackContext):
     """معالجة الملفات الواردة"""
     document = update.message.document
@@ -136,13 +135,16 @@ def handle_document(update: Update, context: CallbackContext):
                 target_format = 'pptx'
             temp_files.append(translated_path)
 
-            # تحويل إلى PDF
+            # إنشاء PDF يدويًا
             output_pdf = translated_path.replace(f'_{target_format}', '_converted.pdf')
-            convertapi.convert(
-                'pdf',
-                {'File': translated_path},
-                from_format=target_format
-            ).save_files(output_pdf)
+            if target_format == 'docx':
+                doc = docx.Document(translated_path)
+                full_text = "\n".join([para.text for para in doc.paragraphs])
+            else:
+                prs = Presentation(translated_path)
+                full_text = "\n".join([shape.text for slide in prs.slides for shape in slide.shapes if hasattr(shape, "text")])
+            
+            create_pdf_from_text(full_text, output_pdf)
             temp_files.append(output_pdf)
 
             # إرسال النتائج
@@ -163,13 +165,11 @@ def handle_document(update: Update, context: CallbackContext):
             translated_docx = translate_docx(converted_docx)
             temp_files.append(translated_docx)
 
-            # تحويل إلى PDF
+            # إنشاء PDF يدويًا
             translated_pdf = translated_docx.replace('.docx', '_converted.pdf')
-            convertapi.convert(
-                'pdf',
-                {'File': translated_docx},
-                from_format='docx'
-            ).save_files(translated_pdf)
+            doc = docx.Document(translated_docx)
+            full_text = "\n".join([para.text for para in doc.paragraphs])
+            create_pdf_from_text(full_text, translated_pdf)
             temp_files.append(translated_pdf)
 
             # إرسال النتائج
