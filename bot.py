@@ -1,119 +1,71 @@
 import os
+import fitz  # PyMuPDF
 import logging
-import openai
-import PyPDF2
-from fpdf import FPDF
-from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from pyreverso import Reverso
+from fpdf import FPDF
 
-# تحميل متغيرات البيئة من ملف .env
-load_dotenv()
+# إعداد سجل الأخطاء
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# الحصول على القيم من متغيرات البيئة
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# استبدل هذا بالتوكن الخاص بك من بوت فاذر
+TELEGRAM_BOT_TOKEN = "6016945663:AAHjacRdRfZ2vUgS2SLmoFgHfMdUye4l6bA"
 
-# التحقق من وجود المفاتيح
-if not TELEGRAM_TOKEN or not OPENAI_API_KEY:
-    raise ValueError("❌ يرجى ضبط متغيرات البيئة TELEGRAM_TOKEN و OPENAI_API_KEY في ملف .env")
+# استخراج النص من PDF
+def extract_text_from_pdf(pdf_path):
+    doc = fitz.open(pdf_path)
+    text = "\n".join([page.get_text("text") for page in doc])
+    return text
 
-# إعداد OpenAI Client API
-client = openai.OpenAI(api_key=OPENAI_API_KEY)
+# ترجمة النص باستخدام Reverso
+def translate_text(text, source_lang="en", target_lang="ar"):
+    reverso = Reverso(text, source_lang, target_lang)
+    translations = reverso.get_translation()
+    return " ".join(translations)
 
-# إعداد تسجيل الأخطاء
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
+# إنشاء PDF جديد مع النص المترجم
+def create_translated_pdf(translated_text, output_path):
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.multi_cell(0, 10, translated_text)
+    pdf.output(output_path)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة أمر /start"""
-    await update.message.reply_text("👋 مرحبًا! أرسل لي ملف PDF وسأقوم بترجمته من الإنجليزية إلى العربية.")
+# التعامل مع استلام الملفات
+async def handle_document(update: Update, context: CallbackContext) -> None:
+    file = await update.message.document.get_file()
+    file_path = f"downloads/{file.file_id}.pdf"
+    os.makedirs("downloads", exist_ok=True)
+    await file.download_to_drive(file_path)
+    
+    update.message.reply_text("جارٍ استخراج النص من الملف...")
+    extracted_text = extract_text_from_pdf(file_path)
+    
+    update.message.reply_text("جارٍ الترجمة، يرجى الانتظار...")
+    translated_text = translate_text(extracted_text)
+    
+    output_path = file_path.replace(".pdf", "_translated.pdf")
+    create_translated_pdf(translated_text, output_path)
+    
+    with open(output_path, "rb") as pdf_file:
+        await update.message.reply_document(document=pdf_file, filename="translated.pdf")
+    
+    os.remove(file_path)
+    os.remove(output_path)
 
-async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """التعامل مع ملفات PDF"""
-    document = update.message.document
-    if document.mime_type != "application/pdf":
-        await update.message.reply_text("⚠️ يرجى إرسال ملف PDF صحيح.")
-        return
-
-    # تنزيل ملف PDF
-    file = await document.get_file()
-    input_filename = "input.pdf"
-    await file.download_to_drive(input_filename)
-
-    # استخراج النص من ملف PDF
-    extracted_text = ""
-    try:
-        with open(input_filename, "rb") as pdf_file:
-            reader = PyPDF2.PdfReader(pdf_file)
-            for page in reader.pages:
-                text = page.extract_text()
-                if text:
-                    extracted_text += text + "\n"
-    except Exception as e:
-        logging.error("❌ خطأ أثناء استخراج النص: %s", e)
-        await update.message.reply_text("❌ حدث خطأ أثناء قراءة الملف.")
-        return
-
-    if not extracted_text.strip():
-        await update.message.reply_text("⚠️ لم يتمكن من استخراج أي نص من الملف.")
-        return
-
-    # ترجمة النص باستخدام OpenAI API (تحديث للكود الجديد)
-    prompt = f"ترجم النص التالي من الإنجليزية إلى العربية مع الحفاظ على المعنى:\n\n{extracted_text}"
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
-        )
-        translated_text = response.choices[0].message.content.strip()
-    except Exception as e:
-        logging.error("❌ خطأ أثناء الترجمة: %s", e)
-        await update.message.reply_text("❌ حدث خطأ أثناء الترجمة.")
-        return
-
-    # إنشاء ملف PDF جديد بالنص المترجم
-    output_filename = "translated.pdf"
-    try:
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_auto_page_break(auto=True, margin=15)
-        pdf.set_font("Arial", size=12)
-        
-        for line in translated_text.split('\n'):
-            pdf.multi_cell(0, 10, line)
-        
-        pdf.output(output_filename)
-    except Exception as e:
-        logging.error("❌ خطأ أثناء إنشاء ملف PDF: %s", e)
-        await update.message.reply_text("❌ حدث خطأ أثناء إنشاء الملف المترجم.")
-        return
-
-    # إرسال الملف المترجم إلى المستخدم
-    try:
-        with open(output_filename, "rb") as translated_file:
-            await update.message.reply_document(document=translated_file)
-    except Exception as e:
-        logging.error("❌ خطأ أثناء إرسال الملف: %s", e)
-        await update.message.reply_text("❌ حدث خطأ أثناء إرسال الملف.")
-
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    """معالجة الأخطاء العامة"""
-    logging.error("⚠️ حدث خطأ: %s", context.error)
-
-def main():
-    """تشغيل البوت"""
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
-
-    # إضافة المعالجات
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.Document.PDF, handle_pdf))
-    application.add_error_handler(error_handler)
-
-    # تشغيل البوت في وضع الاستماع المستمر
-    application.run_polling()
+# بدء البوت
+async def start(update: Update, context: CallbackContext) -> None:
+    await update.message.reply_text("مرحبًا! أرسل لي ملف PDF وسأقوم بترجمته لك من الإنجليزية إلى العربية.")
 
 if __name__ == "__main__":
-    main()
+    from telegram.ext import ApplicationBuilder
+    
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(Filters.document.mime_type("application/pdf"), handle_document))
+    
+    print("🤖 البوت يعمل... انتظر الرسائل!")
+    app.run_polling()
