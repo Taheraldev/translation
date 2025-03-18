@@ -3,6 +3,7 @@ import tempfile
 import logging
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import docx
+from docx.shared import Pt
 from pptx import Presentation
 from pptx.enum.text import PP_ALIGN
 from googletrans import Translator
@@ -40,10 +41,14 @@ def set_paragraph_rtl(paragraph):
 def process_arabic_text(text):
     """
     تعالج النص العربي باستخدام arabic_reshaper و python-bidi لتظهر الحروف بشكل صحيح.
-    كما تقوم بإزالة الفراغات الزائدة.
+    كما تزيل الفراغات الزائدة في حال كانت الكلمة عبارة عن حروف مفردة مفصولة بمسافات.
     """
-    cleaned_text = " ".join(text.split())
-    reshaped_text = arabic_reshaper.reshape(cleaned_text)
+    cleaned_text = text.strip()
+    parts = cleaned_text.split()
+    # إذا كان كل جزء حرف مفرد (أي الكلمة مفصولة حروفاً) نجمعها بدون مسافات
+    if parts and all(len(part) == 1 for part in parts) and len(parts) > 1:
+        cleaned_text = "".join(parts)
+    reshaped_text = arabic_reshaper.reshape(cleaned_text, reshape_ligature=True)
     bidi_text = get_display(reshaped_text)
     return bidi_text
 
@@ -52,7 +57,7 @@ def translate_docx(file_path):
     تقوم هذه الدالة بفتح ملف DOCX وترجمة النصوص الموجودة فيه:
     - الفقرات العادية خارج الجداول.
     - النصوص داخل خلايا الجداول.
-    كما تضبط اتجاه النص ليكون من اليمين لليسار.
+    كما تُعيّن خط "Traditional Arabic" لكل نص وتضبط اتجاه الفقرة.
     """
     doc = docx.Document(file_path)
     
@@ -63,6 +68,9 @@ def translate_docx(file_path):
                 try:
                     translated = translator.translate(run.text, src='en', dest='ar')
                     run.text = process_arabic_text(translated.text)
+                    run.font.name = "Traditional Arabic"
+                    # يمكن تعيين حجم الخط إذا لزم الأمر
+                    run.font.size = Pt(12)
                 except Exception as e:
                     logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
         set_paragraph_rtl(para)
@@ -77,6 +85,8 @@ def translate_docx(file_path):
                             try:
                                 translated = translator.translate(run.text, src='en', dest='ar')
                                 run.text = process_arabic_text(translated.text)
+                                run.font.name = "Traditional Arabic"
+                                run.font.size = Pt(12)
                             except Exception as e:
                                 logger.error(f"خطأ أثناء ترجمة النص داخل الجدول: {run.text}. الخطأ: {e}")
                     set_paragraph_rtl(para)
@@ -88,7 +98,7 @@ def translate_docx(file_path):
 def translate_pptx(file_path):
     """
     تقوم هذه الدالة بفتح ملف PPTX وترجمة النصوص الموجودة داخل الشرائح.
-    كما تضبط محاذاة النص إلى اليمين.
+    كما تُعيّن محاذاة النص إلى اليمين وتحدد خط "Traditional Arabic" لكل نص.
     """
     prs = Presentation(file_path)
     for slide in prs.slides:
@@ -101,6 +111,8 @@ def translate_pptx(file_path):
                             try:
                                 translated = translator.translate(run.text, src='en', dest='ar')
                                 run.text = process_arabic_text(translated.text)
+                                # تعيين الخط في PPTX (قد يختلف تأثيره حسب القالب)
+                                run.font.name = "Traditional Arabic"
                             except Exception as e:
                                 logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
     output_path = file_path.replace('.pptx', '_translated.pptx')
