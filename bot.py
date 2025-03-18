@@ -5,6 +5,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import docx
 from pptx import Presentation
 from googletrans import Translator
+from docx.oxml.ns import qn
 
 # إعداد الـ logging لتتبع الأخطاء والعمليات
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -13,11 +14,21 @@ logger = logging.getLogger(__name__)
 # تهيئة المترجم (يمكنكم استبداله بخدمة ترجمة مدفوعة للحصول على دقة أعلى)
 translator = Translator()
 
+def translate_text(text):
+    """دالة مساعدة لترجمة النصوص باستخدام googletrans."""
+    try:
+        translated = translator.translate(text, src='en', dest='ar')
+        return translated.text
+    except Exception as e:
+        logger.error(f"خطأ أثناء ترجمة النص: {text}. الخطأ: {e}")
+        return text
+
 def translate_docx(file_path):
     """
-    تقوم هذه الدالة بفتح ملف DOCX وترجمة النصوص الموجودة في:
-    - الفقرات العادية خارج الجداول.
-    - النصوص داخل خلايا الجداول.
+    تفتح هذه الدالة ملف DOCX وترجم النصوص الموجودة في:
+    - الفقرات العادية.
+    - النص داخل خلايا الجداول.
+    - النص داخل مربعات النصوص.
     """
     doc = docx.Document(file_path)
     
@@ -25,11 +36,7 @@ def translate_docx(file_path):
     for para in doc.paragraphs:
         for run in para.runs:
             if run.text.strip():
-                try:
-                    translated = translator.translate(run.text, src='en', dest='ar')
-                    run.text = translated.text
-                except Exception as e:
-                    logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
+                run.text = translate_text(run.text)
     
     # ترجمة النصوص داخل الجداول
     for table in doc.tables:
@@ -38,11 +45,20 @@ def translate_docx(file_path):
                 for para in cell.paragraphs:
                     for run in para.runs:
                         if run.text.strip():
-                            try:
-                                translated = translator.translate(run.text, src='en', dest='ar')
-                                run.text = translated.text
-                            except Exception as e:
-                                logger.error(f"خطأ أثناء ترجمة النص داخل الجدول: {run.text}. الخطأ: {e}")
+                            run.text = translate_text(run.text)
+    
+    # ترجمة النص داخل مربعات النصوص باستخدام الوصول لعناصر XML مباشرةً
+    # عناصر مربعات النص تكون ضمن <w:txbxContent>
+    txbx_contents = doc.element.xpath('//w:txbxContent')
+    for txbx in txbx_contents:
+        paragraphs = txbx.xpath('.//w:p')
+        for p in paragraphs:
+            runs = p.xpath('.//w:r')
+            for r in runs:
+                text_elems = r.xpath('.//w:t')
+                for t in text_elems:
+                    if t.text and t.text.strip():
+                        t.text = translate_text(t.text)
     
     output_path = file_path.replace('.docx', '_translated.docx')
     doc.save(output_path)
@@ -50,7 +66,8 @@ def translate_docx(file_path):
 
 def translate_pptx(file_path):
     """
-    تقوم هذه الدالة بفتح ملف PPTX وترجمة النصوص الموجودة داخل الشرائح.
+    تفتح هذه الدالة ملف PPTX وترجم النصوص الموجودة داخل الشرائح.
+    عادةً، مربعات النصوص في ملفات PPTX تظهر كـ shapes مع text_frame.
     """
     prs = Presentation(file_path)
     for slide in prs.slides:
@@ -59,11 +76,7 @@ def translate_pptx(file_path):
                 for paragraph in shape.text_frame.paragraphs:
                     for run in paragraph.runs:
                         if run.text.strip():
-                            try:
-                                translated = translator.translate(run.text, src='en', dest='ar')
-                                run.text = translated.text
-                            except Exception as e:
-                                logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
+                            run.text = translate_text(run.text)
     output_path = file_path.replace('.pptx', '_translated.pptx')
     prs.save(output_path)
     return output_path
