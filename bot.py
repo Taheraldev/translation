@@ -4,30 +4,37 @@ import logging
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import docx
 from pptx import Presentation
+from pptx.enum.text import PP_ALIGN
 from googletrans import Translator
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 
 # إعداد الـ logging لتتبع الأخطاء والعمليات
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# تهيئة المترجم (يمكن استبداله بخدمة ترجمة مدفوعة للحصول على دقة أعلى)
+# تهيئة المترجم (يمكنكم استبداله بخدمة ترجمة مدفوعة للحصول على دقة أعلى)
 translator = Translator()
 
-def translate_text(text):
-    """دالة مساعدة لترجمة النصوص باستخدام googletrans."""
-    try:
-        translated = translator.translate(text, src='en', dest='ar')
-        return translated.text
-    except Exception as e:
-        logger.error(f"خطأ أثناء ترجمة النص: {text}. الخطأ: {e}")
-        return text
+def set_paragraph_rtl(paragraph):
+    """
+    تضيف هذه الدالة عنصر XML يُحدد أن الفقرة يجب أن تُعرض من اليمين لليسار.
+    """
+    p = paragraph._p
+    pPr = p.find(qn('w:pPr'))
+    if pPr is None:
+        pPr = OxmlElement('w:pPr')
+        p.insert(0, pPr)
+    bidi = OxmlElement('w:bidi')
+    bidi.set(qn('w:val'), "1")
+    pPr.append(bidi)
 
 def translate_docx(file_path):
     """
-    تفتح هذه الدالة ملف DOCX وترجم النصوص الموجودة في:
+    تقوم هذه الدالة بفتح ملف DOCX وترجمة النصوص الموجودة في:
     - الفقرات العادية خارج الجداول.
     - النصوص داخل خلايا الجداول.
-    - النصوص داخل مربعات النصوص.
+    كما تضبط اتجاه النص ليكون من اليمين لليسار.
     """
     doc = docx.Document(file_path)
     
@@ -35,7 +42,13 @@ def translate_docx(file_path):
     for para in doc.paragraphs:
         for run in para.runs:
             if run.text.strip():
-                run.text = translate_text(run.text)
+                try:
+                    translated = translator.translate(run.text, src='en', dest='ar')
+                    run.text = translated.text
+                except Exception as e:
+                    logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
+        # ضبط اتجاه الفقرة لتكون من اليمين لليسار
+        set_paragraph_rtl(para)
     
     # ترجمة النصوص داخل الجداول
     for table in doc.tables:
@@ -44,21 +57,13 @@ def translate_docx(file_path):
                 for para in cell.paragraphs:
                     for run in para.runs:
                         if run.text.strip():
-                            run.text = translate_text(run.text)
-    
-    # ترجمة النصوص داخل مربعات النصوص:
-    # نحصل على شجرة XML الأصلية ثم نستخدم XPath مع تحديد النطاق المناسب
-    namespaces = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
-    txbx_contents = doc.element.getroottree().xpath('//w:txbxContent', namespaces=namespaces)
-    for txbx in txbx_contents:
-        paragraphs = txbx.xpath('.//w:p', namespaces=namespaces)
-        for p in paragraphs:
-            runs = p.xpath('.//w:r', namespaces=namespaces)
-            for r in runs:
-                text_elems = r.xpath('.//w:t', namespaces=namespaces)
-                for t in text_elems:
-                    if t.text and t.text.strip():
-                        t.text = translate_text(t.text)
+                            try:
+                                translated = translator.translate(run.text, src='en', dest='ar')
+                                run.text = translated.text
+                            except Exception as e:
+                                logger.error(f"خطأ أثناء ترجمة النص داخل الجدول: {run.text}. الخطأ: {e}")
+                    # ضبط اتجاه الفقرة داخل الخلية
+                    set_paragraph_rtl(para)
     
     output_path = file_path.replace('.docx', '_translated.docx')
     doc.save(output_path)
@@ -66,16 +71,23 @@ def translate_docx(file_path):
 
 def translate_pptx(file_path):
     """
-    تفتح هذه الدالة ملف PPTX وترجم النصوص الموجودة داخل الشرائح.
+    تقوم هذه الدالة بفتح ملف PPTX وترجمة النصوص الموجودة داخل الشرائح.
+    كما تقوم بمحاولة ضبط محاذاة النص إلى اليمين لتسهيل القراءة باللغة العربية.
     """
     prs = Presentation(file_path)
     for slide in prs.slides:
         for shape in slide.shapes:
             if hasattr(shape, "text_frame") and shape.text_frame is not None:
                 for paragraph in shape.text_frame.paragraphs:
+                    # ضبط محاذاة النص إلى اليمين
+                    paragraph.alignment = PP_ALIGN.RIGHT
                     for run in paragraph.runs:
                         if run.text.strip():
-                            run.text = translate_text(run.text)
+                            try:
+                                translated = translator.translate(run.text, src='en', dest='ar')
+                                run.text = translated.text
+                            except Exception as e:
+                                logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
     output_path = file_path.replace('.pptx', '_translated.pptx')
     prs.save(output_path)
     return output_path
