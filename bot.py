@@ -8,6 +8,8 @@ from pptx.enum.text import PP_ALIGN
 from googletrans import Translator
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+import arabic_reshaper
+from bidi.algorithm import get_display
 
 # إعداد الـ logging لتتبع الأخطاء والعمليات
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -29,12 +31,21 @@ def set_paragraph_rtl(paragraph):
     bidi.set(qn('w:val'), "1")
     pPr.append(bidi)
 
+def process_arabic_text(text):
+    """
+    تعالج النص العربي باستخدام arabic_reshaper و python-bidi
+    لتظهر الحروف بشكل صحيح.
+    """
+    reshaped_text = arabic_reshaper.reshape(text)
+    bidi_text = get_display(reshaped_text)
+    return bidi_text
+
 def translate_docx(file_path):
     """
     تقوم هذه الدالة بفتح ملف DOCX وترجمة النصوص الموجودة في:
     - الفقرات العادية خارج الجداول.
     - النصوص داخل خلايا الجداول.
-    كما تضبط اتجاه النص ليكون من اليمين لليسار.
+    كما تضبط اتجاه النص ليكون من اليمين لليسار وتستخدم مكتبات معالجة النص العربي.
     """
     doc = docx.Document(file_path)
     
@@ -44,7 +55,8 @@ def translate_docx(file_path):
             if run.text.strip():
                 try:
                     translated = translator.translate(run.text, src='en', dest='ar')
-                    run.text = translated.text
+                    # معالجة النص العربي
+                    run.text = process_arabic_text(translated.text)
                 except Exception as e:
                     logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
         # ضبط اتجاه الفقرة لتكون من اليمين لليسار
@@ -59,7 +71,7 @@ def translate_docx(file_path):
                         if run.text.strip():
                             try:
                                 translated = translator.translate(run.text, src='en', dest='ar')
-                                run.text = translated.text
+                                run.text = process_arabic_text(translated.text)
                             except Exception as e:
                                 logger.error(f"خطأ أثناء ترجمة النص داخل الجدول: {run.text}. الخطأ: {e}")
                     # ضبط اتجاه الفقرة داخل الخلية
@@ -72,7 +84,7 @@ def translate_docx(file_path):
 def translate_pptx(file_path):
     """
     تقوم هذه الدالة بفتح ملف PPTX وترجمة النصوص الموجودة داخل الشرائح.
-    كما تقوم بمحاولة ضبط محاذاة النص إلى اليمين لتسهيل القراءة باللغة العربية.
+    كما تقوم بمحاولة ضبط محاذاة النص إلى اليمين واستخدام مكتبات معالجة النص العربي.
     """
     prs = Presentation(file_path)
     for slide in prs.slides:
@@ -85,7 +97,7 @@ def translate_pptx(file_path):
                         if run.text.strip():
                             try:
                                 translated = translator.translate(run.text, src='en', dest='ar')
-                                run.text = translated.text
+                                run.text = process_arabic_text(translated.text)
                             except Exception as e:
                                 logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
     output_path = file_path.replace('.pptx', '_translated.pptx')
