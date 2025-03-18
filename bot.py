@@ -6,110 +6,168 @@ import docx
 from pptx import Presentation
 from pptx.enum.text import PP_ALIGN
 from googletrans import Translator
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 import arabic_reshaper
 from bidi.algorithm import get_display
 
-# إعداد الـ logging لتتبع الأخطاء والعمليات
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# إعدادات معالجة النص العربي
+arabic_reshaper.config.forget_letters = True
+arabic_reshaper.config.ligatures = 'required'
+reshaper = arabic_reshaper.ArabicReshaper()
+
+# إعداد التسجيل
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
-# تهيئة المترجم (يمكنكم استبداله بخدمة ترجمة مدفوعة للحصول على دقة أعلى)
 translator = Translator()
 
 def process_arabic_text(text):
-    try:
-        reshaped_text = arabic_reshaper.reshape(text)
-        bidi_text = get_display(reshaped_text)
-        return bidi_text
-    except Exception as e:
-        logger.error(f"Error processing Arabic text: {e}")
-        return text
+    """معالجة النص العربي مع التنسيق الصحيح"""
+    reshaped = reshaper.reshape(text)
+    return get_display(reshaped)
+
+def set_docx_rtl(paragraph):
+    """ضبط اتجاه النص لليمين في DOCX"""
+    p_pr = paragraph._element.get_or_add_pPr()
+    p_bidi = OxmlElement('w:bidi')
+    p_pr.append(p_bidi)
+    p_jc = OxmlElement('w:jc')
+    p_jc.set(qn('w:val'), "right")
+    p_pr.append(p_jc)
 
 def translate_docx(file_path):
+    """ترجمة ملفات DOCX مع الحفاظ على التنسيق"""
     doc = docx.Document(file_path)
+    
+    # معالجة الفقرات الرئيسية
     for para in doc.paragraphs:
-        for run in para.runs:
-            if run.text.strip():
-                try:
-                    translated = translator.translate(run.text, src='en', dest='ar')
-                    run.text = process_arabic_text(translated.text)
-                except Exception as e:
-                    logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
-        para.paragraph_format.right_to_left = True
-
+        full_text = ' '.join(run.text for run in para.runs)
+        if full_text.strip():
+            try:
+                translated = translator.translate(full_text, src='en', dest='ar').text
+                processed_text = process_arabic_text(translated)
+                
+                # مسح المحتوى القديم وإضافة النص الجديد
+                para.clear()
+                new_run = para.add_run(processed_text)
+                
+                # ضبط الخط العربي
+                new_run.font.name = 'Arial'
+                new_run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Arial')
+                
+            except Exception as e:
+                logger.error(f"DOCX Translation Error: {e}")
+        
+        set_docx_rtl(para)
+    
+    # معالجة الجداول
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                for para in cell.paragraphs:
-                    for run in para.runs:
-                        if run.text.strip():
-                            try:
-                                translated = translator.translate(run.text, src='en', dest='ar')
-                                run.text = process_arabic_text(translated.text)
-                            except Exception as e:
-                                logger.error(f"خطأ أثناء ترجمة النص داخل الجدول: {run.text}. الخطأ: {e}")
-                    para.paragraph_format.right_to_left = True
-
+                for cell_para in cell.paragraphs:
+                    cell_text = ' '.join(run.text for run in cell_para.runs)
+                    if cell_text.strip():
+                        try:
+                            translated = translator.translate(cell_text, src='en', dest='ar').text
+                            processed_text = process_arabic_text(translated)
+                            
+                            cell_para.clear()
+                            new_run = cell_para.add_run(processed_text)
+                            new_run.font.name = 'Arial'
+                            new_run._element.rPr.rFonts.set(qn('w:eastAsia'), 'Arial')
+                            
+                        except Exception as e:
+                            logger.error(f"Table Translation Error: {e}")
+                    
+                    set_docx_rtl(cell_para)
+    
     output_path = file_path.replace('.docx', '_translated.docx')
     doc.save(output_path)
     return output_path
 
 def translate_pptx(file_path):
+    """ترجمة ملفات PPTX مع الحفاظ على التنسيق"""
     prs = Presentation(file_path)
+    
     for slide in prs.slides:
         for shape in slide.shapes:
-            if hasattr(shape, "text_frame") and shape.text_frame is not None:
+            if hasattr(shape, "text_frame"):
                 for paragraph in shape.text_frame.paragraphs:
-                    paragraph.alignment = PP_ALIGN.RIGHT
-                    for run in paragraph.runs:
-                        if run.text.strip():
-                            try:
-                                translated = translator.translate(run.text, src='en', dest='ar')
-                                run.text = process_arabic_text(translated.text)
-                            except Exception as e:
-                                logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
+                    full_text = ' '.join(run.text for run in paragraph.runs)
+                    if full_text.strip():
+                        try:
+                            translated = translator.translate(full_text, src='en', dest='ar').text
+                            processed_text = process_arabic_text(translated)
+                            
+                            # مسح المحتوى القديم
+                            for run in paragraph.runs:
+                                run.text = ''
+                            
+                            # إضافة النص الجديد
+                            new_run = paragraph.add_run()
+                            new_run.text = processed_text
+                            
+                            # ضبط الخط والمحاذاة
+                            new_run.font.name = 'Arial'
+                            paragraph.alignment = PP_ALIGN.RIGHT
+                            
+                        except Exception as e:
+                            logger.error(f"PPTX Translation Error: {e}")
+    
     output_path = file_path.replace('.pptx', '_translated.pptx')
     prs.save(output_path)
     return output_path
 
 def start(update, context):
-    update.message.reply_text("مرحباً! أرسل لي ملفاً بصيغة DOCX أو PPTX لأقوم بترجمته.")
+    update.message.reply_text("مرحبا! أرسل ملف DOCX أو PPTX للترجمة إلى العربية.")
 
 def handle_file(update, context):
-    document = update.message.document
-    filename = document.file_name.lower()
-    file_path = os.path.join(tempfile.gettempdir(), filename)
-    file = context.bot.getFile(document.file_id)
-    file.download(custom_path=file_path)
-    update.message.reply_text("جاري معالجة الملف وترجمته، يرجى الانتظار...")
+    file = update.message.document
+    filename = file.file_name
+    temp_dir = tempfile.gettempdir()
+    source_path = os.path.join(temp_dir, filename)
     translated_path = None
+    
     try:
-        if filename.endswith('.docx'):
-            translated_path = translate_docx(file_path)
-        elif filename.endswith('.pptx'):
-            translated_path = translate_pptx(file_path)
+        # تنزيل الملف
+        file.get_file().download(custom_path=source_path)
+        update.message.reply_text("⚙️ جاري المعالجة...")
+        
+        # الترجمة حسب نوع الملف
+        if filename.lower().endswith('.docx'):
+            translated_path = translate_docx(source_path)
+        elif filename.lower().endswith('.pptx'):
+            translated_path = translate_pptx(source_path)
         else:
-            update.message.reply_text("صيغة الملف غير مدعومة. الرجاء إرسال ملف بصيغة DOCX أو PPTX.")
+            update.message.reply_text("❌ الصيغة غير مدعومة! يرجى إرسال DOCX/PPTX فقط.")
             return
-        context.bot.send_document(chat_id=update.message.chat_id, document=open(translated_path, 'rb'))
+        
+        # إرسال الملف المترجم
+        with open(translated_path, 'rb') as f:
+            update.message.reply_document(document=f)
+            
     except Exception as e:
-        logger.error(f"حدث خطأ أثناء ترجمة الملف: {e}")
-        update.message.reply_text("حدث خطأ أثناء ترجمة الملف. الرجاء المحاولة مرة أخرى.")
+        logger.error(f"Error: {str(e)}")
+        update.message.reply_text("❌ حدث خطأ أثناء المعالجة!")
+        
     finally:
-        try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            if translated_path and os.path.exists(translated_path):
-                os.remove(translated_path)
-        except Exception as cleanup_error:
-            logger.warning(f"خطأ أثناء حذف الملفات المؤقتة: {cleanup_error}")
+        # تنظيف الملفات المؤقتة
+        for path in [source_path, translated_path]:
+            if path and os.path.exists(path):
+                os.remove(path)
 
 def main():
-    TOKEN = "5146976580:AAE2yXc-JK6MIHVlLDy-O4YODucS_u7Zq-8"
+    TOKEN = "YOUR_BOT_TOKEN_HERE"
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
+    
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(MessageHandler(Filters.document, handle_file))
+    
     updater.start_polling()
     updater.idle()
 
