@@ -161,7 +161,7 @@ def handle_file(update, context):
                 os.remove(path)
 
 def main():
-    TOKEN = "YOUR_BOT_TOKEN_HERE"
+    TOKEN = "5146976580:AAE2yXc-JK6MIHVlLDy-O4YODucS_u7Zq-8"
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
     
