@@ -11,15 +11,8 @@ from docx.oxml.ns import qn
 import arabic_reshaper
 from bidi.algorithm import get_display
 
-# إعدادات معالجة النص العربي (طريقة جديدة)
-reshaper = arabic_reshaper.ArabicReshaper(
-    config={
-        'delete_harakat': False,  # الحفاظ على التشكيل
-        'support_ligatures': True,  # دعم الوصلات بين الحروف
-        'rtl': True,  # تفعيل وضع اليمين لليسار
-        'language': 'Arabic'  # تحديد اللغة
-    }
-)
+# إعدادات معالجة النص العربي (بدون استخدام `config`)
+reshaper = arabic_reshaper.ArabicReshaper()
 
 # إعداد التسجيل
 logging.basicConfig(
