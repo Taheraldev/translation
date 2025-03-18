@@ -1,6 +1,7 @@
 import os
 import tempfile
 import logging
+import convertapi
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 import docx
@@ -11,10 +12,11 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import arabic_reshaper
 from bidi.algorithm import get_display
-from convertapi import ConvertApi
 
-# إعدادات التحويل والترجمة
-ConvertApi.secret = 'secret_q4ijKpkWw17sLQx8'  # استبدال بالمفتاح الخاص بك
+# إعدادات ConvertAPI
+convertapi.api_secret = 'secret_q4ijKpkWw17sLQx8'  # استبدال بالمفتاح الخاص بك
+
+# إعدادات الترجمة
 translator = Translator()
 
 # إعدادات البوت
@@ -28,6 +30,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def set_paragraph_rtl(paragraph):
+    """تعديل اتجاه الفقرة لليمين-لليسار"""
     p = paragraph._p
     pPr = p.find(qn('w:pPr'))
     if pPr is None:
@@ -38,11 +41,14 @@ def set_paragraph_rtl(paragraph):
     pPr.append(bidi)
 
 def process_arabic_text(text):
+    """معالجة النص العربي للتنسيق الصحيح"""
     reshaped_text = arabic_reshaper.reshape(text)
     return get_display(reshaped_text)
 
 def translate_docx(file_path):
+    """ترجمة ملفات DOCX مع الحفاظ على التنسيق"""
     doc = docx.Document(file_path)
+    
     for para in doc.paragraphs:
         for run in para.runs:
             if run.text.strip():
@@ -71,6 +77,7 @@ def translate_docx(file_path):
     return output_path
 
 def translate_pptx(file_path):
+    """ترجمة ملفات PPTX مع الحفاظ على التنسيق"""
     prs = Presentation(file_path)
     for slide in prs.slides:
         for shape in slide.shapes:
@@ -89,16 +96,18 @@ def translate_pptx(file_path):
     return output_path
 
 def start(update: Update, context: CallbackContext):
+    """رسالة الترحيب"""
     help_text = (
         "مرحبًا! أنا بوت متعدد المهام 🤖\n"
         "يمكنني:\n"
-        "▫️ ترجمة DOCX/PPTX إلى العربية مع تنسيق RTL\n"
+        "▫️ ترجمة DOCX/PPTX إلى العربية\n"
         "▫️ تحويل الملفات بين الصيغ المختلفة\n"
         "أرسل الملف وسأقوم بالمعالجة التلقائية!"
     )
     update.message.reply_text(help_text)
 
 def handle_document(update: Update, context: CallbackContext):
+    """معالجة الملفات الواردة"""
     document = update.message.document
     mime_type = document.mime_type
     file_id = document.file_id
@@ -113,9 +122,11 @@ def handle_document(update: Update, context: CallbackContext):
         file.download(custom_path=input_path)
         temp_files.append(input_path)
 
-        # معالجة حسب نوع الملف
-        if mime_type in ['application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                         'application/vnd.openxmlformats-officedocument.presentationml.presentation']:
+        # تحديد نوع المعالجة
+        if mime_type in [
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        ]:
             # ترجمة الملف
             if 'word' in mime_type:
                 translated_path = translate_docx(input_path)
@@ -127,7 +138,11 @@ def handle_document(update: Update, context: CallbackContext):
 
             # تحويل إلى PDF
             output_pdf = translated_path.replace(f'_{target_format}', '_converted.pdf')
-            ConvertApi().convert('pdf', {'File': translated_path}).save_files(output_pdf)
+            convertapi.convert(
+                'pdf',
+                {'File': translated_path},
+                from_format=target_format
+            ).save_files(output_pdf)
             temp_files.append(output_pdf)
 
             # إرسال النتائج
@@ -137,7 +152,11 @@ def handle_document(update: Update, context: CallbackContext):
         elif mime_type == 'application/pdf':
             # تحويل PDF إلى DOCX
             converted_docx = input_path.replace('.pdf', '_converted.docx')
-            ConvertApi().convert('docx', {'File': input_path}).save_files(converted_docx)
+            convertapi.convert(
+                'docx',
+                {'File': input_path},
+                from_format='pdf'
+            ).save_files(converted_docx)
             temp_files.append(converted_docx)
 
             # ترجمة DOCX
@@ -146,7 +165,11 @@ def handle_document(update: Update, context: CallbackContext):
 
             # تحويل إلى PDF
             translated_pdf = translated_docx.replace('.docx', '_converted.pdf')
-            ConvertApi().convert('pdf', {'File': translated_docx}).save_files(translated_pdf)
+            convertapi.convert(
+                'pdf',
+                {'File': translated_docx},
+                from_format='docx'
+            ).save_files(translated_pdf)
             temp_files.append(translated_pdf)
 
             # إرسال النتائج
@@ -172,6 +195,7 @@ def handle_document(update: Update, context: CallbackContext):
                 logger.warning(f"Error deleting {path}: {e}")
 
 def main():
+    """تشغيل البوت"""
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
 
