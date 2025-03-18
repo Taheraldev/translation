@@ -10,7 +10,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import arabic_reshaper
 from bidi.algorithm import get_display
-from convertapi import ConvertApi
+import convertapi  # استيراد مكتبة convertapi بالإصدار 1.5.0
 
 # إعداد الـ logging لتتبع الأخطاء والعمليات
 logging.basicConfig(
@@ -18,8 +18,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# إعداد ConvertAPI بالمفتاح السري
-ConvertApi.secret = 'secret_q4ijKpkWw17sLQx8'
+# إعداد ConvertAPI بالمفتاح السري لإصدار 1.5.0
+convertapi.api_secret = 'secret_q4ijKpkWw17sLQx8'
 
 # تهيئة المترجم (يمكن استبداله بخدمة ترجمة مدفوعة للحصول على دقة أعلى)
 translator = Translator()
@@ -48,10 +48,10 @@ def process_arabic_text(text):
 
 def translate_docx(file_path):
     """
-    تقوم هذه الدالة بفتح ملف DOCX وترجمة النصوص الموجودة في:
+    تقوم هذه الدالة بفتح ملف DOCX وترجمة النصوص الموجودة فيه:
     - الفقرات العادية خارج الجداول.
     - النصوص داخل خلايا الجداول.
-    كما تضبط اتجاه النص ليكون من اليمين لليسار وتستخدم مكتبات معالجة النص العربي.
+    كما تضبط اتجاه النص ليكون من اليمين لليسار.
     """
     doc = docx.Document(file_path)
     
@@ -87,7 +87,7 @@ def translate_docx(file_path):
 def translate_pptx(file_path):
     """
     تقوم هذه الدالة بفتح ملف PPTX وترجمة النصوص الموجودة داخل الشرائح.
-    كما تقوم بمحاولة ضبط محاذاة النص إلى اليمين واستخدام مكتبات معالجة النص العربي.
+    كما تضبط محاذاة النص إلى اليمين.
     """
     prs = Presentation(file_path)
     for slide in prs.slides:
@@ -111,7 +111,7 @@ def convert_api(input_path, target_format, output_path):
     تستخدم هذه الدالة ConvertAPI لتحويل الملف إلى الصيغة المطلوبة.
     """
     try:
-        result = ConvertApi().convert(target_format, {'File': input_path})
+        result = convertapi.convert(target_format, {'File': input_path})
         result.save_files(output_path)
         logger.info(f"تم تحويل الملف إلى {target_format} بنجاح: {output_path}")
         return output_path
@@ -251,7 +251,7 @@ def handle_file(update, context):
             logger.warning(f"خطأ أثناء حذف الملفات المؤقتة: {cleanup_error}")
 
 def main():
-    TOKEN = "5146976580:AAE2yXc-JK6MIHVlLDy-O4YODucS_u7Zq-8"
+    TOKEN = "5146976580:AAE2yXc-JK6MIHVlLDy-O4YODucS_u7Zq-8"  # استبدل هذا بتوكن البوت الخاص بك
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
 
