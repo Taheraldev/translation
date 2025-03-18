@@ -10,12 +10,18 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import arabic_reshaper
 from bidi.algorithm import get_display
+from convertapi import ConvertApi
 
 # إعداد الـ logging لتتبع الأخطاء والعمليات
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
-# تهيئة المترجم (يمكنكم استبداله بخدمة ترجمة مدفوعة للحصول على دقة أعلى)
+# إعداد ConvertAPI بالمفتاح السري
+ConvertApi.secret = 'secret_q4ijKpkWw17sLQx8'
+
+# تهيئة المترجم (يمكن استبداله بخدمة ترجمة مدفوعة للحصول على دقة أعلى)
 translator = Translator()
 
 def set_paragraph_rtl(paragraph):
@@ -55,11 +61,9 @@ def translate_docx(file_path):
             if run.text.strip():
                 try:
                     translated = translator.translate(run.text, src='en', dest='ar')
-                    # معالجة النص العربي
                     run.text = process_arabic_text(translated.text)
                 except Exception as e:
                     logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
-        # ضبط اتجاه الفقرة لتكون من اليمين لليسار
         set_paragraph_rtl(para)
     
     # ترجمة النصوص داخل الجداول
@@ -74,7 +78,6 @@ def translate_docx(file_path):
                                 run.text = process_arabic_text(translated.text)
                             except Exception as e:
                                 logger.error(f"خطأ أثناء ترجمة النص داخل الجدول: {run.text}. الخطأ: {e}")
-                    # ضبط اتجاه الفقرة داخل الخلية
                     set_paragraph_rtl(para)
     
     output_path = file_path.replace('.docx', '_translated.docx')
@@ -91,7 +94,6 @@ def translate_pptx(file_path):
         for shape in slide.shapes:
             if hasattr(shape, "text_frame") and shape.text_frame is not None:
                 for paragraph in shape.text_frame.paragraphs:
-                    # ضبط محاذاة النص إلى اليمين
                     paragraph.alignment = PP_ALIGN.RIGHT
                     for run in paragraph.runs:
                         if run.text.strip():
@@ -104,10 +106,28 @@ def translate_pptx(file_path):
     prs.save(output_path)
     return output_path
 
+def convert_api(input_path, target_format, output_path):
+    """
+    تستخدم هذه الدالة ConvertAPI لتحويل الملف إلى الصيغة المطلوبة.
+    """
+    try:
+        result = ConvertApi().convert(target_format, {'File': input_path})
+        result.save_files(output_path)
+        logger.info(f"تم تحويل الملف إلى {target_format} بنجاح: {output_path}")
+        return output_path
+    except Exception as e:
+        logger.error(f"خطأ أثناء تحويل الملف باستخدام ConvertAPI: {e}")
+        return None
+
 def start(update, context):
-    update.message.reply_text(
-        "مرحباً! أرسل لي ملفاً بصيغة DOCX أو PPTX (أو ملفات DOC/PPT بعد تحويلها) لأقوم بترجمته من الإنجليزية إلى العربية."
+    help_text = (
+        "مرحبًا! أنا بوت الترجمة والتحويل.\n"
+        "يمكنك إرسال ملف من الصيغ التالية:\n"
+        "▫️ DOCX / PPTX (وإن كان ملف DOC أو PPT بعد التحويل)\n"
+        "▫️ PDF\n"
+        "وسيتم ترجمة الملف من الإنجليزية إلى العربية، بالإضافة إلى تحويله إلى PDF."
     )
+    update.message.reply_text(help_text)
 
 def handle_file(update, context):
     document = update.message.document
@@ -115,58 +135,129 @@ def handle_file(update, context):
     file_path = os.path.join(tempfile.gettempdir(), filename)
     
     # تنزيل الملف المرسل إلى مسار مؤقت
-    file = context.bot.getFile(document.file_id)
+    file = context.bot.get_file(document.file_id)
     file.download(custom_path=file_path)
     
-    update.message.reply_text("جاري معالجة الملف وترجمته، يرجى الانتظار...")
+    update.message.reply_text("جاري معالجة الملف، يرجى الانتظار...")
     
-    translated_path = None
+    translated_file = None
+    converted_pdf = None
+    
     try:
-        if filename.endswith('.docx'):
-            translated_path = translate_docx(file_path)
-        elif filename.endswith('.pptx'):
-            translated_path = translate_pptx(file_path)
-        elif filename.endswith('.doc'):
+        if filename.endswith('.doc') or filename.endswith('.ppt'):
             update.message.reply_text(
-                "صيغة DOC غير مدعومة مباشرة. الرجاء تحويل الملف إلى DOCX أولاً (يمكن استخدام LibreOffice للتحويل)."
+                "صيغة DOC أو PPT غير مدعومة مباشرة. الرجاء تحويل الملف إلى DOCX أو PPTX أولاً."
             )
-            return
-        elif filename.endswith('.ppt'):
-            update.message.reply_text(
-                "صيغة PPT غير مدعومة مباشرة. الرجاء تحويل الملف إلى PPTX أولاً (يمكن استخدام LibreOffice للتحويل)."
-            )
-            return
-        else:
-            update.message.reply_text("صيغة الملف غير مدعومة. الرجاء إرسال ملف بصيغة DOCX أو PPTX.")
             return
         
-        # إرسال الملف المترجم للمستخدم
-        context.bot.send_document(chat_id=update.message.chat_id, document=open(translated_path, 'rb'))
+        elif filename.endswith('.pdf'):
+            # تحويل ملف PDF إلى DOCX باستخدام ConvertAPI
+            converted_docx_path = file_path.replace('.pdf', '_converted.docx')
+            conversion_result = convert_api(file_path, 'docx', converted_docx_path)
+            if not conversion_result:
+                update.message.reply_text("حدث خطأ أثناء تحويل ملف PDF إلى DOCX.")
+                return
+            # ترجمة الملف المحول (DOCX)
+            translated_file = translate_docx(conversion_result)
+            # تحويل الملف المترجم إلى PDF باستخدام ConvertAPI
+            converted_pdf = translated_file.replace('_translated.docx', '_translated.pdf')
+            pdf_conversion_result = convert_api(translated_file, 'pdf', converted_pdf)
+            if not pdf_conversion_result:
+                update.message.reply_text("حدث خطأ أثناء تحويل الملف المترجم إلى PDF.")
+                return
+            # إرسال الملف المترجم بصيغة DOCX
+            with open(translated_file, 'rb') as doc_file:
+                context.bot.send_document(
+                    chat_id=update.message.chat_id,
+                    document=doc_file,
+                    caption="هذا هو الملف المترجم بصيغة DOCX"
+                )
+            # إرسال الملف المترجم بصيغة PDF
+            with open(converted_pdf, 'rb') as pdf_file:
+                context.bot.send_document(
+                    chat_id=update.message.chat_id,
+                    document=pdf_file,
+                    caption="هذا هو الملف المترجم بصيغة PDF"
+                )
+        
+        elif filename.endswith('.docx'):
+            # ترجمة ملف DOCX
+            translated_file = translate_docx(file_path)
+            # تحويل الملف المترجم إلى PDF باستخدام ConvertAPI
+            converted_pdf = translated_file.replace('_translated.docx', '_translated.pdf')
+            pdf_conversion_result = convert_api(translated_file, 'pdf', converted_pdf)
+            if not pdf_conversion_result:
+                update.message.reply_text("حدث خطأ أثناء تحويل الملف المترجم إلى PDF.")
+                return
+            # إرسال الملف المترجم بصيغة DOCX
+            with open(translated_file, 'rb') as doc_file:
+                context.bot.send_document(
+                    chat_id=update.message.chat_id,
+                    document=doc_file,
+                    caption="هذا هو الملف المترجم بصيغة DOCX"
+                )
+            # إرسال الملف المترجم بصيغة PDF
+            with open(converted_pdf, 'rb') as pdf_file:
+                context.bot.send_document(
+                    chat_id=update.message.chat_id,
+                    document=pdf_file,
+                    caption="هذا هو الملف المترجم بصيغة PDF"
+                )
+        
+        elif filename.endswith('.pptx'):
+            # ترجمة ملف PPTX
+            translated_file = translate_pptx(file_path)
+            # تحويل الملف المترجم إلى PDF باستخدام ConvertAPI
+            converted_pdf = translated_file.replace('_translated.pptx', '_translated.pdf')
+            pdf_conversion_result = convert_api(translated_file, 'pdf', converted_pdf)
+            if not pdf_conversion_result:
+                update.message.reply_text("حدث خطأ أثناء تحويل الملف المترجم إلى PDF.")
+                return
+            # إرسال الملف المترجم بصيغة PPTX
+            with open(translated_file, 'rb') as ppt_file:
+                context.bot.send_document(
+                    chat_id=update.message.chat_id,
+                    document=ppt_file,
+                    caption="هذا هو الملف المترجم بصيغة PPTX"
+                )
+            # إرسال الملف المترجم بصيغة PDF
+            with open(converted_pdf, 'rb') as pdf_file:
+                context.bot.send_document(
+                    chat_id=update.message.chat_id,
+                    document=pdf_file,
+                    caption="هذا هو الملف المترجم بصيغة PDF"
+                )
+        else:
+            update.message.reply_text(
+                "صيغة الملف غير مدعومة. الرجاء إرسال ملف بصيغة DOCX, PPTX أو PDF."
+            )
+    
     except Exception as e:
-        logger.error(f"حدث خطأ أثناء ترجمة الملف: {e}")
-        update.message.reply_text("حدث خطأ أثناء ترجمة الملف. الرجاء المحاولة مرة أخرى.")
+        logger.error(f"حدث خطأ أثناء معالجة الملف: {e}")
+        update.message.reply_text("حدث خطأ أثناء معالجة الملف. الرجاء المحاولة مرة أخرى.")
+    
     finally:
-        # حذف الملفات المؤقتة
+        # تنظيف الملفات المؤقتة
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
-            if translated_path and os.path.exists(translated_path):
-                os.remove(translated_path)
+            if 'converted_docx_path' in locals() and os.path.exists(converted_docx_path):
+                os.remove(converted_docx_path)
+            if translated_file and os.path.exists(translated_file):
+                os.remove(translated_file)
+            if converted_pdf and os.path.exists(converted_pdf):
+                os.remove(converted_pdf)
         except Exception as cleanup_error:
             logger.warning(f"خطأ أثناء حذف الملفات المؤقتة: {cleanup_error}")
 
 def main():
-    # ضع توكن البوت الخاص بك هنا
-    TOKEN = "6016945663:AAHjacRdRfZ2vUgS2SLmoFgHfMdUye4l6bA"
-    
+    TOKEN = "5146976580:AAE2yXc-JK6MIHVlLDy-O4YODucS_u7Zq-8"
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
 
-    # إعداد الأوامر والرسائل
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(MessageHandler(Filters.document, handle_file))
-    
-    # بدء البوت
+
     updater.start_polling()
     updater.idle()
 
