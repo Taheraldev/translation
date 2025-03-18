@@ -11,16 +11,22 @@ from docx.oxml.ns import qn
 import arabic_reshaper
 from bidi.algorithm import get_display
 
-# استيراد معالجة PDF من pdf.py
-from pdf import handle_document as handle_pdf
-
-# إعداد الـ logging
+# إعداد الـ logging لتتبع الأخطاء والعمليات
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# تهيئة المترجم
 translator = Translator()
 
+# إعداد تكوين مخصص لمكتبة arabic_reshaper
+arabic_config = arabic_reshaper.get_default_config()
+arabic_config.delete_harakat = True      # حذف الحركات لتقليل التشويه
+arabic_config.support_ligatures = True    # دعم الربط بين الحروف
+
 def set_paragraph_rtl(paragraph):
+    """
+    تضيف هذه الدالة عنصر XML يُحدد أن الفقرة يجب أن تُعرض من اليمين لليسار.
+    """
     p = paragraph._p
     pPr = p.find(qn('w:pPr'))
     if pPr is None:
@@ -31,13 +37,24 @@ def set_paragraph_rtl(paragraph):
     pPr.append(bidi)
 
 def process_arabic_text(text):
-    reshaped_text = arabic_reshaper.reshape(text)
+    """
+    تعالج النص العربي باستخدام arabic_reshaper مع إعدادات مُخصصة
+    ثم تُعيد النص مع عرض صحيح باستخدام python-bidi.
+    """
+    reshaped_text = arabic_reshaper.reshape(text, configuration=arabic_config)
     bidi_text = get_display(reshaped_text)
     return bidi_text
 
 def translate_docx(file_path):
+    """
+    تقوم هذه الدالة بفتح ملف DOCX وترجمة النصوص الموجودة في:
+    - الفقرات العادية خارج الجداول.
+    - النصوص داخل خلايا الجداول.
+    كما تضبط اتجاه النص ليكون من اليمين لليسار.
+    """
     doc = docx.Document(file_path)
     
+    # ترجمة الفقرات العادية
     for para in doc.paragraphs:
         for run in para.runs:
             if run.text.strip():
@@ -47,7 +64,8 @@ def translate_docx(file_path):
                 except Exception as e:
                     logger.error(f"خطأ أثناء ترجمة النص: {run.text}. الخطأ: {e}")
         set_paragraph_rtl(para)
-
+    
+    # ترجمة النصوص داخل الجداول
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
@@ -60,12 +78,16 @@ def translate_docx(file_path):
                             except Exception as e:
                                 logger.error(f"خطأ أثناء ترجمة النص داخل الجدول: {run.text}. الخطأ: {e}")
                     set_paragraph_rtl(para)
-
+    
     output_path = file_path.replace('.docx', '_translated.docx')
     doc.save(output_path)
     return output_path
 
 def translate_pptx(file_path):
+    """
+    تقوم هذه الدالة بفتح ملف PPTX وترجمة النصوص الموجودة داخل الشرائح.
+    كما تقوم بضبط محاذاة النص إلى اليمين.
+    """
     prs = Presentation(file_path)
     for slide in prs.slides:
         for shape in slide.shapes:
@@ -85,49 +107,47 @@ def translate_pptx(file_path):
 
 def start(update, context):
     update.message.reply_text(
-        "مرحباً! أرسل لي ملفاً بصيغة DOCX أو PPTX أو PDF لأقوم بترجمته أو تحويله حسب الحاجة."
+        "مرحباً! أرسل لي ملفاً بصيغة DOCX أو PPTX (أو ملفات DOC/PPT بعد تحويلها) لأقوم بترجمته من الإنجليزية إلى العربية."
     )
 
 def handle_file(update, context):
     document = update.message.document
     filename = document.file_name.lower()
     file_path = os.path.join(tempfile.gettempdir(), filename)
-
+    
+    # تنزيل الملف المرسل إلى مسار مؤقت
     file = context.bot.getFile(document.file_id)
     file.download(custom_path=file_path)
-
-    update.message.reply_text("جاري معالجة الملف، يرجى الانتظار...")
-
+    
+    update.message.reply_text("جاري معالجة الملف وترجمته، يرجى الانتظار...")
+    
     translated_path = None
     try:
-        if filename.endswith('.pdf'):
-            # تمرير ملف PDF إلى pdf.py لمعالجته هناك
-            handle_pdf(update, context)
-            return
-
-        elif filename.endswith('.docx'):
+        if filename.endswith('.docx'):
             translated_path = translate_docx(file_path)
         elif filename.endswith('.pptx'):
             translated_path = translate_pptx(file_path)
         elif filename.endswith('.doc'):
             update.message.reply_text(
-                "صيغة DOC غير مدعومة مباشرة. الرجاء تحويل الملف إلى DOCX أولاً."
+                "صيغة DOC غير مدعومة مباشرة. الرجاء تحويل الملف إلى DOCX أولاً (يمكن استخدام LibreOffice للتحويل)."
             )
             return
         elif filename.endswith('.ppt'):
             update.message.reply_text(
-                "صيغة PPT غير مدعومة مباشرة. الرجاء تحويل الملف إلى PPTX أولاً."
+                "صيغة PPT غير مدعومة مباشرة. الرجاء تحويل الملف إلى PPTX أولاً (يمكن استخدام LibreOffice للتحويل)."
             )
             return
         else:
-            update.message.reply_text("صيغة الملف غير مدعومة.")
+            update.message.reply_text("صيغة الملف غير مدعومة. الرجاء إرسال ملف بصيغة DOCX أو PPTX.")
             return
-
+        
+        # إرسال الملف المترجم للمستخدم
         context.bot.send_document(chat_id=update.message.chat_id, document=open(translated_path, 'rb'))
     except Exception as e:
-        logger.error(f"حدث خطأ أثناء معالجة الملف: {e}")
-        update.message.reply_text("حدث خطأ أثناء معالجة الملف. الرجاء المحاولة مرة أخرى.")
+        logger.error(f"حدث خطأ أثناء ترجمة الملف: {e}")
+        update.message.reply_text("حدث خطأ أثناء ترجمة الملف. الرجاء المحاولة مرة أخرى.")
     finally:
+        # حذف الملفات المؤقتة
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
@@ -137,14 +157,17 @@ def handle_file(update, context):
             logger.warning(f"خطأ أثناء حذف الملفات المؤقتة: {cleanup_error}")
 
 def main():
+    # ضع توكن البوت الخاص بك هنا
     TOKEN = "5146976580:AAE2yXc-JK6MIHVlLDy-O4YODucS_u7Zq-8"
-
+    
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
 
+    # إعداد الأوامر والرسائل
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(MessageHandler(Filters.document, handle_file))
-
+    
+    # بدء البوت
     updater.start_polling()
     updater.idle()
 
