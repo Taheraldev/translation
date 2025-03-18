@@ -1,4 +1,3 @@
-You said:
 import os
 import tempfile
 import logging
