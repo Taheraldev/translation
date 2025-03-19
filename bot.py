@@ -95,7 +95,7 @@ def handle_document(update: Update, context: CallbackContext) -> None:
 def main() -> None:
     """الدالة الرئيسية لتشغيل البوت"""
     # استبدل 'YOUR_TELEGRAM_BOT_TOKEN' برمز البوت الخاص بك
-    updater = Updater("5284087690:AAGRrcZBDcRW3k86XIyY6HVHs57oeiLZ3rc", use_context=True)
+    updater = Updater("5284087690:AAGwKfPojQ3c-SjCHSIdeog-yN3-4Gpim1Y", use_context=True)
     dispatcher = updater.dispatcher
     
     # إضافة معالجات الأوامر والرسائل
