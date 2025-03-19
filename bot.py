@@ -65,7 +65,7 @@ def handle_document(update: Update, context: CallbackContext):
 
 # تشغيل البوت
 def main():
-    TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"  # استبدل هذا بالتوكن الفعلي
+    TELEGRAM_BOT_TOKEN = "5284087690:AAGRrcZBDcRW3k86XIyY6HVHs57oeiLZ3rc"  # استبدل هذا بالتوكن الفعلي
     updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
