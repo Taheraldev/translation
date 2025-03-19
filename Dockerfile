@@ -1,5 +1,5 @@
 # Dockerfile
-FROM python:3.9-slim-buster
+FROM python:3.9
 
 # تثبيت المتطلبات النظامية
 RUN apt-get update && apt-get install -y \
@@ -11,7 +11,6 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # تحديث الفونت كاش
-RUN fc-cache -f -v
 
 # إنشاء مجلد العمل
 WORKDIR /app
@@ -24,9 +23,6 @@ COPY bot.py .
 RUN pip3 install --upgrade pip
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# متغيرات البيئة
-ENV PYTHONUNBUFFERED 1
-ENV TZ=Asia/Riyadh
 COPY . /app/
 # تشغيل البوت
 CMD ["python3", "bot.py"]
