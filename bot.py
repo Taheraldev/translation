@@ -7,7 +7,7 @@ from docx import Document
 
 # استبدل هذه القيم برموز API الخاصة بك
 TELEGRAM_BOT_TOKEN = "5284087690:AAGwKfPojQ3c-SjCHSIdeog-yN3-4Gpim1Y"
-SMARTCAT_API_KEY = "2_FwEmd5QMpKxDbHnNnwydzEL3o"
+SMARTCAT_API_KEY = "3_1yZ0xLBqYy0JOTFlQlRbLhct0"
 
 def start(update, context):
     context.bot.send_message(chat_id=update.effective_chat.id, text="أرسل لي ملف PDF لترجمته.")
