@@ -12,7 +12,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# بيانات اعتماد Smartcat والإعدادات (قم بتعديلها حسب بيانات حسابك)
 ACCOUNT_ID = "63b1e7ba-ecdc-4978-a1a9-d27dd36d5b48"          # معرف الحساب (Account ID)
 API_KEY = "2_FwEmd5QMpKxDbHnNnwydzEL3o"                # مفتاح API (ككلمة مرور)
 PERMANENT_PROJECT_ID = "21355320-aee6-4b65-966f-a810e802b81a"  # معرف المشروع الدائم في Smartcat
@@ -31,12 +30,14 @@ def get_auth_header():
 
 def upload_document(file_path):
     """
-    يقوم بتحميل ملف إلى المشروع الدائم في Smartcat.
-    يستخدم نقطة النهاية: POST project/document
-    يُرسل الملف مع معلمات الوثيقة (documentModel) بتنسيق JSON.
+    يقوم برفع ملف إلى المشروع الدائم في Smartcat.
+    يستخدم نقطة النهاية: POST project/document مع تمرير projectId عبر الرابط
+    وإرسال بيانات documentModel كجزء من الـ multipart.
     """
-    url = BASE_URL + "project/document"
-    # نموذج الوثيقة (يمكنك تعديل الإعدادات الإضافية كما تشاء)
+    # تمرير معرف المشروع عبر الـ query string
+    url = BASE_URL + "project/document?projectId=" + PERMANENT_PROJECT_ID
+
+    # إعداد بيانات النموذج (documentModel)
     document_model = [
         {
             "externalId": os.path.basename(file_path),
@@ -48,21 +49,20 @@ def upload_document(file_path):
                 "lockMode": "none",
                 "confirmMode": "none"
             },
-            "targetLanguages": ["ar"],  # ترجمة إلى العربية؛ يعتمد على إعدادات مشروعك
+            "targetLanguages": ["ar"],  # ترجمة إلى العربية؛ تأكد من توافقها مع إعدادات مشروعك
             "enablePlaceholders": True,
             "enableOcr": True
         }
     ]
-    payload = {
-        "documentModel": json.dumps(document_model),
-        "projectId": PERMANENT_PROJECT_ID  # تأكد أن هذا المعامل مطلوب بحسب الوثائق
-    }
+
+    # إرسال البيانات كـ multipart بحيث يتم تحديد نوع المحتوى لـ documentModel
     files = {
-        "file": open(file_path, "rb")
+        "file": open(file_path, "rb"),
+        "documentModel": ("documentModel", json.dumps(document_model), "application/json")
     }
     headers = get_auth_header()
     try:
-        response = requests.post(url, data=payload, files=files, headers=headers)
+        response = requests.post(url, files=files, headers=headers)
         if response.status_code == 200:
             resp_json = response.json()
             # نفترض أن الرد يحتوي على معرف الوثيقة بالشكل التالي:
@@ -88,8 +88,8 @@ def export_document(document_id):
     params = {
         "documentIds": document_id,
         "mode": "current",
-        "type": "target",      # النوع "target" يعني الحصول على الملف المترجم
-        "stageNumber": "1"     # رقم المرحلة؛ يعتمد على إعدادات سير العمل في المشروع
+        "type": "target",      # "target" للحصول على الملف المترجم
+        "stageNumber": "1"     # رقم المرحلة؛ تأكد من توافقه مع إعدادات مشروعك
     }
     headers = get_auth_header()
     try:
