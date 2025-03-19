@@ -140,7 +140,7 @@ def handle_document(update: Update, context: CallbackContext):
         update.message.reply_text("فشل تصدير الملف المترجم. يرجى المحاولة لاحقًا.")
 
 def main():
-    TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"  # استبدل بتوكن بوت تيليجرام الخاص بك
+    TELEGRAM_BOT_TOKEN = "5284087690:AAGRrcZBDcRW3k86XIyY6HVHs57oeiLZ3rc"  # استبدل بتوكن بوت تيليجرام الخاص بك
     updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
