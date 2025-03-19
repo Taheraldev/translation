@@ -114,7 +114,7 @@ def get_translated_file(document_id):
 
 if __name__ == "__main__":
     # استبدل 'YOUR_BOT_TOKEN' بتوكن البوت الخاص بك
-    updater = Updater("YOUR_BOT_TOKEN", use_context=True)
+    updater = Updater("5284087690:AAGRrcZBDcRW3k86XIyY6HVHs57oeiLZ3rc", use_context=True)
     dp = updater.dispatcher
     dp.add_handler(MessageHandler(Filters.document.pdf, handle_pdf))
     updater.start_polling()
