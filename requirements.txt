@@ -1,7 +1,2 @@
-python-telegram-bot
-python-docx 
-python-pptx 
-googletrans==4.0.0-rc1
-arabic_reshaper
-python-bidi
-PyPDF2==2.12.1
+python-telegram-bot 
+requests
