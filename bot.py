@@ -1,79 +1,77 @@
-import os
-import logging
-import requests
+from telegram.ext import Updater, MessageHandler, Filters
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+import requests
+import os
 
-# إعداد سجل الأخطاء
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
+# إعدادات Smartcat
+SMARTCAT_API_KEY = '2_FwEmd5QMpKxDbHnNnwydzEL3o'
+PROJECT_ID = '21355320-aee6-4b65-966f-a810e802b81a'
+BASE_URL = 'https://smartcat.com/api/integration/v1/'
 
-# API Key الخاص بـ Smartcat
-SMARTCAT_API_KEY = "2_FwEmd5QMpKxDbHnNnwydzEL3o"
-SMARTCAT_API_ENDPOINT = "https://api.smartcat.ai/api2/v2/translate"
+def handle_pdf(update, context):
+    user = update.message.from_user
+    try:
+        # تنزيل الملف
+        file = update.message.document.get_file()
+        temp_pdf = f"temp_{user.id}.pdf"
+        file.download(temp_pdf)
+        
+        # رفع الملف إلى Smartcat
+        document_id = upload_to_smartcat(temp_pdf)
+        
+        # بدء الترجمة
+        start_translation(document_id)
+        
+        # الحصول على الملف المترجم
+        translated_file = get_translated_file(document_id)
+        update.message.reply_document(
+            document=open(translated_file, 'rb'),
+            caption="✅ تمت الترجمة بنجاح"
+        )
+        
+    except Exception as e:
+        update.message.reply_text(f"❌ خطأ: {str(e)}")
+    finally:
+        if os.path.exists(temp_pdf):
+            os.remove(temp_pdf)
+        if os.path.exists(translated_file):
+            os.remove(translated_file)
 
-# دالة ترجمة ملف PDF باستخدام Smartcat API
-def translate_pdf(file_path):
-    with open(file_path, 'rb') as pdf_file:
-        files = {'file': pdf_file}
-        data = {'source_language': 'en', 'target_language': 'ar'}
-        headers = {'Authorization': f"Bearer {SMARTCAT_API_KEY}"}
+def upload_to_smartcat(file_path):
+    url = f"{BASE_URL}project/{PROJECT_ID}/document"
+    response = requests.post(url, headers=headers)
+    response.raise_for_status()
+    
+    document_id = response.json()['id']
+    upload_url = response.json()['uploadUrl']
+    
+    with open(file_path, 'rb') as f:
+        upload_response = requests.put(upload_url, data=f)
+        upload_response.raise_for_status()
+    
+    return document_id
 
-        try:
-            response = requests.post(SMARTCAT_API_ENDPOINT, files=files, data=data, headers=headers)
-            if response.status_code == 200:
-                return response.content  # الملف المترجم
-            else:
-                logger.error("فشل الترجمة. الكود: %s، الرد: %s", response.status_code, response.text)
-                return None
-        except Exception as e:
-            logger.error("خطأ أثناء الاتصال بـ Smartcat API: %s", str(e))
-            return None
+def start_translation(document_id):
+    url = f"{BASE_URL}project/{PROJECT_ID}/document/{document_id}/start"
+    response = requests.post(url, headers=headers)
+    response.raise_for_status()
 
-# دالة بدء البوت
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("مرحبًا! أرسل لي ملف PDF لترجمته من الإنجليزية إلى العربية.")
-
-# دالة معالجة الملفات المرسلة
-def handle_document(update: Update, context: CallbackContext):
-    document = update.message.document
-    if document.mime_type != 'application/pdf':
-        update.message.reply_text("يرجى إرسال ملف بصيغة PDF فقط.")
-        return
-
-    file_id = document.file_id
-    new_file = context.bot.get_file(file_id)
-
-    # حفظ الملف في مجلد "downloads"
-    os.makedirs("downloads", exist_ok=True)
-    file_path = os.path.join("downloads", document.file_name)
-    new_file.download(file_path)
-
-    update.message.reply_text("جاري معالجة الملف...")
-
-    # ترجمة الملف عبر Smartcat API
-    translated_content = translate_pdf(file_path)
-    if translated_content:
-        translated_file_path = file_path.replace('.pdf', '.docx')
-        with open(translated_file_path, 'wb') as f:
-            f.write(translated_content)
-
-        update.message.reply_text("تمت الترجمة بنجاح! إليك الملف:")
-        context.bot.send_document(chat_id=update.effective_chat.id, document=open(translated_file_path, 'rb'))
-    else:
-        update.message.reply_text("حدث خطأ أثناء الترجمة. يرجى المحاولة لاحقًا.")
-
-# تشغيل البوت
-def main():
-    TELEGRAM_BOT_TOKEN = "5284087690:AAGRrcZBDcRW3k86XIyY6HVHs57oeiLZ3rc"  # استبدل هذا بالتوكن الفعلي
-    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.document.pdf, handle_document))
-
-    updater.start_polling()
-    updater.idle()
+def get_translated_file(document_id):
+    doc_url = f"{BASE_URL}project/{PROJECT_ID}/document/{document_id}"
+    response = requests.get(doc_url, headers=headers)
+    download_url = response.json()['translatedFileUrl']
+    
+    file_response = requests.get(download_url)
+    file_path = f"translated_{document_id}.docx"
+    
+    with open(file_path, 'wb') as f:
+        f.write(file_response.content)
+    
+    return file_path
 
 if __name__ == '__main__':
-    main()
+    updater = Updater("5284087690:AAGRrcZBDcRW3k86XIyY6HVHs57oeiLZ3rc", use_context=True)
+    dp = updater.dispatcher
+    dp.add_handler(MessageHandler(Filters.document.pdf, handle_pdf))
+    updater.start_polling()
+    updater.idle()
