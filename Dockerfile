@@ -1,12 +1,5 @@
-FROM python:3.9-slim-buster
+FROM python:3.9
 
-# تثبيت المتطلبات النظامية
-RUN apt-get update && apt-get install -y \
-    libreoffice-writer \
-    fonts-noto \
-    fonts-arabeyes \
-    fontconfig \
-    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
