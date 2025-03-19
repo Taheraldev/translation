@@ -1,18 +1,13 @@
-# Dockerfile
-FROM python:3.9
+FROM python:3.9-slim-buster
 
 # تثبيت المتطلبات النظامية
 RUN apt-get update && apt-get install -y \
     libreoffice-writer \
     fonts-noto \
     fonts-arabeyes \
-    ttf-mscorefonts-installer \
     fontconfig \
     && rm -rf /var/lib/apt/lists/*
 
-# تحديث الفونت كاش
-
-# إنشاء مجلد العمل
 WORKDIR /app
 
 # نسخ الملفات المطلوبة
