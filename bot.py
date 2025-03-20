@@ -44,7 +44,7 @@ with groupdocs_translation_cloud.ApiClient(configuration) as api_client:
             while True:
                 status_response = api_instance.pdf_request_id_get(response.id)
                 if status_response.status == 200:
-                    translated_file_path = status_response.translations["ri"]
+                    translated_file_path = status_response.translations["ru"]
                     logging.info(f"🎯 تمت الترجمة! رابط الملف المترجم: {translated_file_path}")
 
                     # تنزيل الملف المترجم
