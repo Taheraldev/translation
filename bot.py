@@ -9,7 +9,7 @@ api.api_client.configuration.client_secret = "310ccbd37a74f255fcfce47eae846f1b"
 
 text_request = TextRequest(
     source_language="en", 
-    target_languages=["es", "fr", "ar"], 
+    target_languages=["es", "fr", "ru"], 
     texts=["Hello World!", "This is a test text"], 
     origin="your_application_name", 
     contains_markdown=False
