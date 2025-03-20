@@ -1,2 +1,3 @@
 groupdocs_translation_cloud
 requests
+oauthlib
