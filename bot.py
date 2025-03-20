@@ -13,12 +13,14 @@ api.api_client.configuration.client_id = "a0ab8978-a4d6-412d-b9cd-fbfcea706dee"
 api.api_client.configuration.client_secret = "310ccbd37a74f255fcfce47eae846f1b"
 
 # تحديد ملف PDF المراد ترجمته
-pdf_file_path = "file.pdf"  # استبدل بمسار الملف الفعلي
+pdf_file_path = "file.pdf"  # استبدل هذا بالمسار الصحيح للملف
 
-# إنشاء طلب الترجمة
+# إنشاء طلب ترجمة PDF مع تحديد sourceLanguage و outputFormat
 pdf_request = PdfFileRequest(
     file_path=pdf_file_path,
-    target_languages=["ru"],  # استبدل اللغات حسب الحاجة
+    target_languages=["ru"],       # اللغات الهدف
+    sourceLanguage="en",           # اللغة المصدر (مثلاً الإنجليزية)
+    outputFormat="pdf",            # تنسيق الملف الناتج
     origin="your_application_name"
 )
 
@@ -27,11 +29,10 @@ response = api.pdf_post(pdf_request)
 
 if response.status == 202:
     while True:
-        # التحقق من حالة الطلب
         status_response = api.pdf_request_id_get(response.id)
         if status_response.status == 200:
-            translated_file_path = status_response.translations["ar"]  # احصل على المسار الصحيح
-            logging.info(f"تمت الترجمة! تنزيل الملف من: {translated_file_path}")
+            translated_file_path = status_response.translations["ar"]
+            logging.info(f"تمت الترجمة! رابط الملف المترجم: {translated_file_path}")
 
             # تنزيل الملف المترجم
             output_path = "translated_file.pdf"
