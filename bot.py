@@ -1,6 +1,5 @@
 import groupdocs_translation_cloud
 from groupdocs_translation_cloud.models.pdf_file_request import PdfFileRequest
-from groupdocs_translation_cloud.models.file_info import FileInfo
 from groupdocs_translation_cloud.rest import ApiException
 from pprint import pprint
 import os
@@ -15,13 +14,11 @@ configuration.access_token = os.environ["ACCESS_TOKEN"]
 with groupdocs_translation_cloud.ApiClient(configuration) as api_client:
     api_instance = groupdocs_translation_cloud.TranslationApi(api_client)
     
-    # Prepare request data with required fields
-    source_file = FileInfo(
-        file_path="file.pdf"  # Specify your PDF file path
-    )
-    
+    # Manually construct the request payload
     pdf_file_request = PdfFileRequest(
-        source_file=source_file,
+        source_file={
+            "file_path": "file.pdf"  # Specify your PDF file path
+        },
         output_format="pdf",  # Required output format
         target_language_code="en"  # Target language code (e.g., English)
     )
