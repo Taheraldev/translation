@@ -1,6 +1,6 @@
 import time
 import groupdocs_translation_cloud
-from groupdocs_translation_cloud import TextRequest, PdfFileRequest, Format
+from groupdocs_translation_cloud import TextRequest, PdfFileRequest
 
 api = groupdocs_translation_cloud.api.TranslationApi()
 file_api = groupdocs_translation_cloud.api.FileApi()
