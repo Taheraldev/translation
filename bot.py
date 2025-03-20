@@ -56,12 +56,12 @@ def translate_pptx(file_path):
     return new_pptx_path
 
 # دالة استقبال الملفات من تيليجرام
-async def handle_document(update: Update, context: CallbackContext):
-    file = await update.message.document.get_file()
+def handle_document(update: Update, context: CallbackContext):
+    file = update.message.document.get_file()
     ext = file.file_path.split(".")[-1].lower()
     temp_dir = tempfile.mkdtemp()
     temp_file = os.path.join(temp_dir, f"file.{ext}")
-    await file.download_to_drive(temp_file)
+    file.download(temp_file)
     
     if ext == "pdf":
         translated_file = translate_pdf(temp_file)
@@ -70,11 +70,13 @@ async def handle_document(update: Update, context: CallbackContext):
     elif ext == "pptx":
         translated_file = translate_pptx(temp_file)
     else:
-        await update.message.reply_text("❌ الملف غير مدعوم! الرجاء إرسال PDF أو DOCX أو PPTX.")
+        update.message.reply_text("❌ الملف غير مدعوم! الرجاء إرسال PDF أو DOCX أو PPTX.")
         return
     
     with open(translated_file, "rb") as f:
-        await update.message.reply_document(InputFile(f, filename=os.path.basename(translated_file)), caption="✅ تم الترجمة بنجاح!")
+        update.message.reply_document(InputFile(f, filename=os.path.basename(translated_file)), caption="✅ تم الترجمة بنجاح!")
+
+
 
 # تهيئة البوت
 def main():
