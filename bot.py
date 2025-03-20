@@ -1,3 +1,4 @@
+import os
 import groupdocs_translation_cloud
 from groupdocs_translation_cloud.models.pdf_file_request import PdfFileRequest
 from groupdocs_translation_cloud.models.status_response import StatusResponse
