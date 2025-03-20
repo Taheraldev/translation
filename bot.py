@@ -20,7 +20,8 @@ with groupdocs_translation_cloud.ApiClient(configuration) as api_client:
             "file_path": "file.pdf"  # Specify your PDF file path
         },
         output_format="pdf",  # Required output format
-        target_language_code="en"  # Target language code (e.g., English)
+        source_language="es",  # Source language code (e.g., Spanish)
+        target_languages=["en"],  # List of target language codes (e.g., English)
     )
     
     try:
