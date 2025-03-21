@@ -113,7 +113,7 @@ def main():
     updater = Updater(TELEGRAM_TOKEN)
     dispatcher = updater.dispatcher
 
-    # تسجيل الـ handlers
+   
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(MessageHandler(Filters.document.pdf, handle_pdf))
 
