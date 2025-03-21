@@ -16,7 +16,6 @@ COPY . /app
 WORKDIR /app
 
 # نسخ الخط العربي إلى مجلد الخطوط
-COPY Arial.ttf /usr/share/fonts/truetype/
 
 # تثبيت المكتبات
 RUN pip install --no-cache-dir -r requirements.txt
