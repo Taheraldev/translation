@@ -2,14 +2,15 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-from convertapi import ConvertApi  
+from convertapi import ConvertApi  # استخدام الإصدار القديم
 
 # إعدادات ConvertAPI
-ConvertApi.secret = 'secret_lFUCQ7x8MrYAJHsk'  # الطريقة القديمة
-# إعدادات ConvertAPI
-# باقي الإعدادات بدون تغيير
+ConvertApi.secret = 'secret_lFUCQ7x8MrYAJHsk'  # المفتاح السري
+
+# إعدادات البوت
 TOKEN = "5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc"
 
+# خريطة التحويل المدعومة
 SUPPORTED_CONVERSIONS = {
     'application/pdf': {
         'target_format': 'docx',
@@ -54,7 +55,7 @@ def handle_document(update, context):
         # تنزيل الملف
         file_id = file.file_id
         new_file = context.bot.get_file(file_id)
-        file_ext = mime_type.split('/')[-1]  # إصلاح هنا
+        file_ext = mime_type.split('.')[-1]
         input_path = f"temp_{file_id}.{file_ext}"
         new_file.download(input_path)
 
@@ -63,8 +64,8 @@ def handle_document(update, context):
         target_format = conversion['target_format']
         output_path = f"converted_{file_id}.{target_format}"
 
-        # التحويل باستخدام الإصدار 1.8.0
-        result = ConvertApi().convert(  # التعديل هنا
+        # تنفيذ التحويل باستخدام ConvertApi (الإصدار القديم)
+        result = ConvertApi().convert(
             target_format,
             {'File': input_path}
         )
@@ -77,7 +78,7 @@ def handle_document(update, context):
                 caption=conversion['response_text']
             )
 
-        # تنظيف الملفات
+        # تنظيف الملفات المؤقتة
         os.remove(input_path)
         os.remove(output_path)
 
