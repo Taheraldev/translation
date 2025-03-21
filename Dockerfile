@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libtesseract-dev \
     tesseract-ocr-ara \  # حزمة اللغة العربية لـ Tesseract
-    fonts-noto \         # خطوط تدعم العربية
+    fonts-arabeyes \     # خطوط تدعم العربية
     && rm -rf /var/lib/apt/lists/*
 
 # نسخ ملفات المشروع (بما في ذلك الخطوط)
