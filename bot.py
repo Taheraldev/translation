@@ -20,7 +20,7 @@ def handle_document(update: Update, context: CallbackContext):
 
     # التحقق من أن الملف PDF
     if document.mime_type != 'application/pdf':
-        update.message.reply_text("يرجى إرسال ملف PDF فقط.")
+        update.message.reply_text("❌ يرجى إرسال ملف PDF فقط.")
         return
 
     file = context.bot.getFile(document.file_id)
@@ -37,12 +37,17 @@ def handle_document(update: Update, context: CallbackContext):
     try:
         # استخدام ConvertAPI لتحويل الملف
         result = convertapi.convert(target_format, {'File': pdf_filename})
+        print("🔍 استجابة ConvertAPI:", result)
+
+        if not result or not result.file:
+            raise ValueError("⚠️ فشل التحويل: لم يتم استلام ملف ناتج.")
+
         output_filename = f'converted.{target_format}'
         result.file.save(output_filename)
 
         # إرسال الملف المحول
         with open(output_filename, 'rb') as converted_file:
-            update.message.reply_document(document=converted_file, filename=output_filename, caption=f"تم تحويل الملف إلى {target_format.upper()} بنجاح.")
+            update.message.reply_document(document=converted_file, filename=output_filename, caption=f"✅ تم تحويل الملف إلى {target_format.upper()} بنجاح.")
 
     except Exception as e:
         update.message.reply_text(f"❌ حدث خطأ أثناء التحويل: {e}")
