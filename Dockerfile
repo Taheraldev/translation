@@ -21,15 +21,3 @@ WORKDIR /app
 RUN pip install --no-cache-dir -r requirements.txt
 
 CMD ["python", "bot.py"]
-
-# نسخ ملفات المشروع (بما في ذلك الخطوط)
-COPY . /app
-WORKDIR /app
-
-# نسخ الخط العربي إلى مجلد الخطوط
-COPY arial.ttf /usr/share/fonts/truetype/
-
-# تثبيت المكتبات
-RUN pip install --no-cache-dir -r requirements.txt
-
-CMD ["python", "bot.py"]
