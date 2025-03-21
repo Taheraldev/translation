@@ -32,6 +32,8 @@ def handle_document(update: Update, context: CallbackContext):
     # نوع التحويل المطلوب (يمكن تعديله لاحقاً)
     target_format = 'docx'  # غيّره إلى 'pptx' لتحويل إلى عرض تقديمي
 
+    output_filename = None  # التأكد من تعريف المتغير قبل استخدامه
+
     try:
         # استخدام ConvertAPI لتحويل الملف
         result = convertapi.convert(target_format, {'File': pdf_filename})
@@ -43,13 +45,13 @@ def handle_document(update: Update, context: CallbackContext):
             update.message.reply_document(document=converted_file, filename=output_filename, caption=f"تم تحويل الملف إلى {target_format.upper()} بنجاح.")
 
     except Exception as e:
-        update.message.reply_text(f"حدث خطأ أثناء التحويل: {e}")
+        update.message.reply_text(f"❌ حدث خطأ أثناء التحويل: {e}")
 
     finally:
-        # حذف الملفات المؤقتة
+        # حذف الملفات المؤقتة فقط إذا تم إنشاؤها
         if os.path.exists(pdf_filename):
             os.remove(pdf_filename)
-        if os.path.exists(output_filename):
+        if output_filename and os.path.exists(output_filename):
             os.remove(output_filename)
 
 def main():
