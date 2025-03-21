@@ -1,17 +1,18 @@
 FROM python:3.9-slim
 
-# تثبيت Tesseract
+# تثبيت Tesseract والخطوط العربية
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libtesseract-dev \
+    tesseract-ocr-ara \  # حزمة اللغة العربية لـ Tesseract
+    fonts-noto \         # خطوط تدعم العربية
     && rm -rf /var/lib/apt/lists/*
 
-# نسخ الملفات المطلوبة
+# نسخ ملفات المشروع (بما في ذلك الخطوط)
 COPY . /app
 WORKDIR /app
 
-# تثبيت المكتبات المطلوبة
+# تثبيت المكتبات
 RUN pip install --no-cache-dir -r requirements.txt
 
-# تشغيل البوت
 CMD ["python", "bot.py"]
