@@ -1,16 +1,17 @@
-FROM python:3.9
+FROM python:3.9-slim
 
-
-WORKDIR /app
+# تثبيت Tesseract
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    libtesseract-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # نسخ الملفات المطلوبة
-COPY requirements.txt .
-COPY bot.py .
+COPY . /app
+WORKDIR /app
 
-# ترقية pip أولاً
-RUN pip3 install --upgrade pip
-RUN pip3 install --no-cache-dir -r requirements.txt
+# تثبيت المكتبات المطلوبة
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . /app/
 # تشغيل البوت
-CMD ["python3", "bot.py"]
+CMD ["python", "bot.py"]
