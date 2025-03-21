@@ -1,7 +1,7 @@
 import os
 import convertapi
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler
 
 # إعداد مفتاح ConvertAPI
 CONVERT_API_KEY = "secret_ZJOY2tBFX1c3T3hA"
@@ -12,32 +12,56 @@ TEMP_FOLDER = "temp_files"
 os.makedirs(TEMP_FOLDER, exist_ok=True)
 
 def start(update: Update, context: CallbackContext):
-    update.message.reply_text("أرسل ملف PDF لتحويله إلى DOCX.")
+    update.message.reply_text("أرسل ملف PDF أو DOCX أو PPTX لتحويله.")
 
-def convert_pdf_to_docx(pdf_path: str, docx_path: str):
-    convertapi.convert('docx', {'File': pdf_path}, from_format='pdf').save_files(docx_path)
+def show_conversion_options(update: Update, context: CallbackContext, file_id: str, file_name: str):
+    keyboard = [
+        [InlineKeyboardButton("تحويل إلى DOCX", callback_data=f"pdf_to_docx|{file_id}|{file_name}")],
+        [InlineKeyboardButton("تحويل إلى PPTX", callback_data=f"pdf_to_pptx|{file_id}|{file_name}")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    update.message.reply_text("اختر نوع التحويل:", reply_markup=reply_markup)
+
+def convert_file(input_path: str, output_format: str, output_path: str):
+    convertapi.convert(output_format, {'File': input_path}).save_files(output_path)
 
 def handle_document(update: Update, context: CallbackContext):
     file = update.message.document
-    if file.mime_type != "application/pdf":
-        update.message.reply_text("يرجى إرسال ملف PDF فقط.")
-        return
+    file_id = file.file_id
+    file_name = file.file_name.lower()
     
-    file_path = os.path.join(TEMP_FOLDER, file.file_name)
-    docx_path = file_path.replace(".pdf", ".docx")
+    if file.mime_type == "application/pdf":
+        show_conversion_options(update, context, file_id, file_name)
+    elif file.mime_type in ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.presentationml.presentation"]:
+        keyboard = [[InlineKeyboardButton("تحويل إلى PDF", callback_data=f"to_pdf|{file_id}|{file_name}")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        update.message.reply_text("اختر نوع التحويل:", reply_markup=reply_markup)
+    else:
+        update.message.reply_text("صيغة الملف غير مدعومة.")
+
+def button_handler(update: Update, context: CallbackContext):
+    query = update.callback_query
+    query.answer()
     
-    pdf_file = context.bot.getFile(file.file_id)
+    data = query.data.split("|")
+    action, file_id, file_name = data[0], data[1], data[2]
+    
+    file_path = os.path.join(TEMP_FOLDER, file_name)
+    output_format = "pdf" if action == "to_pdf" else action.split("_to_")[1]
+    output_path = file_path.rsplit(".", 1)[0] + f".{output_format}"
+    
+    pdf_file = context.bot.getFile(file_id)
     pdf_file.download(file_path)
     
-    update.message.reply_text("جارٍ تحويل الملف... يرجى الانتظار.")
+    query.edit_message_text("جارٍ تحويل الملف... يرجى الانتظار.")
     try:
-        convert_pdf_to_docx(file_path, docx_path)
-        update.message.reply_document(document=open(docx_path, "rb"))
+        convert_file(file_path, output_format, output_path)
+        query.message.reply_document(document=open(output_path, "rb"))
     except Exception as e:
-        update.message.reply_text(f"حدث خطأ أثناء التحويل: {str(e)}")
+        query.message.reply_text(f"حدث خطأ أثناء التحويل: {str(e)}")
     finally:
         os.remove(file_path)
-        os.remove(docx_path)
+        os.remove(output_path)
 
 def main():
     updater = Updater("5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc", use_context=True)
@@ -45,6 +69,7 @@ def main():
     
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(MessageHandler(Filters.document, handle_document))
+    dp.add_handler(CallbackQueryHandler(button_handler))
     
     updater.start_polling()
     updater.idle()
