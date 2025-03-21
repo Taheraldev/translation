@@ -5,7 +5,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from convertapi import ConvertApi  # استخدام الإصدار القديم
 
 # إعدادات ConvertAPI
-ConvertApi.secret = 'secret_lFUCQ7x8MrYAJHsk'  # المفتاح السري
+ConvertApi.secret = 'secret_lFUCQ7x8MrYAJHsk'  
 
 # إعدادات البوت
 TOKEN = "5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc"
