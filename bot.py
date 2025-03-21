@@ -2,10 +2,10 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-from convertapi import ConvertApi  # استخدام الإصدار القديم
+import convertapi
 
 # إعدادات ConvertAPI
-ConvertApi.secret = 'secret_lFUCQ7x8MrYAJHsk'  # المفتاح السري
+convertapi.api_credentials = 'secret_lFUCQ7x8MrYAJHsk'  # المفتاح السري
 
 # إعدادات البوت
 TOKEN = "5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc"
@@ -64,11 +64,8 @@ def handle_document(update, context):
         target_format = conversion['target_format']
         output_path = f"converted_{file_id}.{target_format}"
 
-        # تنفيذ التحويل باستخدام ConvertApi (الإصدار القديم)
-        result = ConvertApi().convert(
-            target_format,
-            {'File': input_path}
-        )
+        # تنفيذ التحويل باستخدام ConvertAPI (الإصدار الأحدث)
+        result = convertapi.convert(target_format, {'File': input_path})
         result.save_files(output_path)
 
         # إرسال الملف المحول
