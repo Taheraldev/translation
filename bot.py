@@ -2,7 +2,8 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-from convertapi import ConvertApi  # استخدام الإصدار القديم
+import convertapi
+  # استخدام الإصدار القديم
 
 # إعدادات ConvertAPI
 ConvertApi.secret = 'secret_q4ijKpkWw17sLQx8'  # المفتاح السري
