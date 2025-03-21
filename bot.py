@@ -4,11 +4,9 @@ import convertapi
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-# إعداد ConvertAPI
 CONVERTAPI_SECRET = "secret_ZJOY2tBFX1c3T3hA"
 convertapi.api_secret = CONVERTAPI_SECRET
 
-# إعدادات البوت
 TOKEN = "5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc"
 DOWNLOAD_PATH = "downloads"
 OUTPUT_PATH = "output"
