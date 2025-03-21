@@ -25,8 +25,11 @@ def start(update: Update, context: CallbackContext) -> None:
 def convert_pdf_to_docx(pdf_path: str) -> str:
     try:
         result = convertapi.convert('docx', { 'File': pdf_path }, from_format='pdf')
-        docx_files = result.save_files(OUTPUT_PATH)
-        return docx_files[0] if docx_files else None
+        if result and hasattr(result, "save_files"):
+            docx_files = result.save_files(OUTPUT_PATH)
+            return docx_files[0] if docx_files else None
+        else:
+            return None
     except Exception as e:
         logging.error(f"Error during conversion: {e}")
         return None
