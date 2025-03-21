@@ -1,33 +1,49 @@
-import groupdocs_translation_cloud
-from groupdocs_translation_cloud.models.pdf_file_request import PdfFileRequest
-from groupdocs_translation_cloud.rest import ApiException
-from pprint import pprint
 import os
+import logging
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from PIL import Image
+import pytesseract
+from googletrans import Translator
 
-# Configure access token
-configuration = groupdocs_translation_cloud.Configuration(
-    host="https://api.groupdocs.cloud/v2.0/translation"
-)
-configuration.access_token = os.environ["ACCESS_TOKEN"]
+# إعدادات البوت
+TOKEN = os.getenv("TOKEN")  # الحصول على التوكن من متغيرات البيئة
+translator = Translator()
 
-# Create API client
-with groupdocs_translation_cloud.ApiClient(configuration) as api_client:
-    api_instance = groupdocs_translation_cloud.TranslationApi(api_client)
+# تفعيل اللوغاريثمات
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text('مرحبًا! أرسل لي صورة تحتوي على نص إنجليزي وسأترجمه للعربية.')
+
+def handle_photo(update: Update, context: CallbackContext):
+    # تحميل الصورة
+    photo_file = update.message.photo[-1].get_file()
+    photo_path = 'temp_image.jpg'
+    photo_file.download(photo_path)
     
-    # Manually construct the request payload
-    pdf_file_request = PdfFileRequest(
-        source_file={
-            "file_path": "file.pdf"  # Specify your PDF file path
-        },
-        output_format="pdf",  # Required output format
-        source_language="es",  # Source language code (e.g., Spanish)
-        target_languages=["en"],  # List of target language codes (e.g., English)
-    )
+    # معالجة الصورة باستخدام OCR
+    img = Image.open(photo_path)
+    english_text = pytesseract.image_to_string(img, lang='eng')
     
-    try:
-        # Execute the request
-        api_response = api_instance.pdf_trial_post(pdf_file_request=pdf_file_request)
-        print("Response from TranslationApi->pdf_trial_post:")
-        pprint(api_response)
-    except ApiException as e:
-        print(f"Exception: {e}\n")
+    # الترجمة إلى العربية
+    translation = translator.translate(english_text, src='en', dest='ar')
+    
+    # إرسال النتيجة
+    update.message.reply_text(f'الترجمة:\n{translation.text}')
+    
+    # حذف الصورة المؤقتة
+    os.remove(photo_path)
+
+def main():
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
+    
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.photo & ~Filters.command, handle_photo))
+    
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
