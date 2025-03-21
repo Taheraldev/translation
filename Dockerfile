@@ -5,8 +5,6 @@ FROM python:3.9-slim
 WORKDIR /app
 
 # تحديث pip إلى أحدث إصدار
-RUN pip install --upgrade pip
-
 # نسخ الملفات المطلوبة
 COPY requirements.txt .
 
