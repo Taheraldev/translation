@@ -4,8 +4,8 @@ FROM python:3.9-slim
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libtesseract-dev \
-    tesseract-ocr-ara \  # حزمة اللغة العربية لـ Tesseract
-    fonts-arabeyes \     # خطوط تدعم العربية
+    tesseract-ocr-ara \
+    fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
 # نسخ ملفات المشروع (بما في ذلك الخطوط)
