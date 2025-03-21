@@ -1,90 +1,114 @@
-import logging
 import os
-from tempfile import NamedTemporaryFile
-
 import requests
-from telegram import Update
+import logging
+from io import BytesIO
+from telegram import Update, InputFile
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from dotenv import load_dotenv
 
-# إعدادات التهيئة
+# تحميل المتغيرات من ملف .env
+load_dotenv()
+API_KEY = os.getenv('FREE_CONVERT_API_KEY')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+
+# إعداد التسجيل
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# مفتاح API من convertapi
-CONVERT_API_SECRET = 'secret_lFUCQ7x8MrYAJHsk'
-CONVERT_API_URL = 'https://v2.convertapi.com/convert/pdf/to/docx'
+headers = {
+    'Authorization': f'Bearer {API_KEY}',
+    'Accept': 'application/json'
+}
 
 def start(update: Update, context: CallbackContext):
-    """يرسل رسالة ترحيب عند استخدام الأمر /start"""
-    update.message.reply_text(
-        'مرحبا! أرسل لي ملف PDF وسأحوله إلى مستند Word (DOCX) لك.'
-    )
+    user = update.effective_user
+    update.message.reply_text(f"مرحبًا {user.first_name}! أرسل ملف PDF لتحويله إلى DOCX.")
 
 def handle_pdf(update: Update, context: CallbackContext):
-    """يتعامل مع ملفات PDF المرسلة"""
-    user = update.message.from_user
-    document = update.message.document
-
-    # التحقق من نوع الملف
-    if document.mime_type != 'application/pdf':
-        update.message.reply_text('يرجى إرسال ملف PDF فقط.')
-        return
-
     try:
-        # تنزيل ملف PDF
-        pdf_file = context.bot.get_file(document.file_id)
-        pdf_path = f'{document.file_id}.pdf'
-        pdf_file.download(pdf_path)
+        # تنزيل الملف المؤقت
+        file = update.message.document.get_file()
+        file_stream = BytesIO()
+        file.download(out=file_stream)
+        file_stream.seek(0)
+        
+        update.message.reply_text("⏳ جاري التحويل...")
 
-        # إرسال الملف إلى ConvertAPI
-        with open(pdf_path, 'rb') as f:
-            response = requests.post(
-                CONVERT_API_URL,
-                params={'secret': CONVERT_API_SECRET},
-                files={'File': (pdf_path, f)}
+        # إنشاء مهمة التحويل
+        job_payload = {
+            "tasks": {
+                "import-1": {"operation": "import/upload", "filename": "input.pdf"},
+                "convert-1": {
+                    "operation": "convert",
+                    "input": "import-1",
+                    "input_format": "pdf",
+                    "output_format": "docx"
+                },
+                "export-1": {"operation": "export/url", "input": ["convert-1"]}
+            }
+        }
+
+        # إنشاء المهمة
+        response = requests.post(
+            "https://api.freeconvert.com/v1/process/jobs",
+            headers=headers,
+            json=job_payload
+        )
+        
+        if response.status_code != 201:
+            raise Exception(f"خطأ في إنشاء المهمة: {response.text}")
+
+        job_data = response.json()
+        job_id = job_data['id']
+        upload_url = job_data['tasks']['import-1']['result']['form']['url']
+        upload_fields = job_data['tasks']['import-1']['result']['form']['parameters']
+
+        # رفع الملف مباشرة من الذاكرة
+        files = {'file': ('input.pdf', file_stream)}
+        upload_response = requests.post(upload_url, files=files, data=upload_fields)
+        
+        if upload_response.status_code != 200:
+            raise Exception(f"خطأ في الرفع: {upload_response.text}")
+
+        # متابعة حالة التحويل
+        while True:
+            status_response = requests.get(
+                f"https://api.freeconvert.com/v1/process/{job_id}",
+                headers=headers
             )
+            status_data = status_response.json()
+            
+            if status_data['status'] == 'completed':
+                download_url = status_data['tasks']['export-1']['result']['files'][0]['url']
+                break
+            elif status_data['status'] == 'failed':
+                raise Exception("فشل التحويل: " + status_data.get('message', 'Unknown error'))
+            time.sleep(5)
 
-        # التحقق من نجاح التحويل
-        if response.status_code != 200:
-            raise Exception(f'خطأ في التحويل: {response.status_code}')
-
-        # إنشاء ملف مؤقت لحفظ النتيجة
-        with NamedTemporaryFile(suffix='.docx', delete=False) as temp_file:
-            temp_file.write(response.content)
-            temp_path = temp_file.name
-
-        # إرسال الملف المحول للمستخدم
-        with open(temp_path, 'rb') as docx_file:
-            update.message.reply_document(
-                document=docx_file,
-                filename=f'{document.file_name}.docx'
-            )
+        # تنزيل وإرسال الملف مباشرة من الذاكرة
+        docx_response = requests.get(download_url)
+        docx_file = BytesIO(docx_response.content)
+        docx_file.name = 'converted.docx'
+        
+        update.message.reply_document(
+            document=InputFile(docx_file),
+            caption="تم التحويل بنجاح 🎉"
+        )
 
     except Exception as e:
-        logger.error(e)
-        update.message.reply_text('حدث خطأ أثناء معالجة الملف. يرجى المحاولة لاحقًا.')
-    
-    finally:
-        # تنظيف الملفات المؤقتة
-        if 'pdf_path' in locals() and os.path.exists(pdf_path):
-            os.remove(pdf_path)
-        if 'temp_path' in locals() and os.path.exists(temp_path):
-            os.remove(temp_path)
+        logger.error(f"Error: {e}", exc_info=True)
+        update.message.reply_text("❌ حدث خطأ أثناء التحويل. يرجى المحاولة لاحقًا.")
 
 def main():
-    """تشغيل البوت"""
-    # استبدل 'YOUR_BOT_TOKEN' بتوكن البوت الخاص بك
-    updater = Updater(token='5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc', use_context=True)
-    dp = updater.dispatcher
+    updater = Updater(TELEGRAM_TOKEN)
+    dispatcher = updater.dispatcher
 
-    # إضافة handlers
-    dp.add_handler(CommandHandler('start', start))
-    dp.add_handler(MessageHandler(Filters.document, handle_pdf))
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(MessageHandler(Filters.document.pdf, handle_pdf))
 
-    # بدء البوت
     updater.start_polling()
     updater.idle()
 
