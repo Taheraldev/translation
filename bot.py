@@ -6,7 +6,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 
 # إعدادات البوت
 TELEGRAM_BOT_TOKEN = '5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc'
-CONVERT_API_SECRET = 'secret_lFUCQ7x8MrYAJHsk'
+CONVERT_API_SECRET = 'secret_ZJOY2tBFX1c3T3hA'
 convertapi.api_secret = CONVERT_API_SECRET
 
 # تفعيل نظام تسجيل الأحداث (للتصحيح)
