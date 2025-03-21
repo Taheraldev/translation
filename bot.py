@@ -7,8 +7,8 @@ from dotenv import load_dotenv
 
 # تحميل المتغيرات من ملف .env
 load_dotenv()
-API_KEY = os.getenv('api_production_8c2dd4109244aa3e3b155ffb6f1c883fa6b37f62657a7834b9c3d4365b23d4a6.67dd34d41b1ec0ad5910e28c.67dd3566824532b94589fab6')
-TELEGRAM_TOKEN = os.getenv('5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc')
+API_KEY = os.getenv('FREE_CONVERT_API_KEY')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 
 # إعداد التسجيل
 logging.basicConfig(
@@ -113,7 +113,7 @@ def main():
     updater = Updater(TELEGRAM_TOKEN)
     dispatcher = updater.dispatcher
 
-   
+    # تسجيل الـ handlers
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(MessageHandler(Filters.document.pdf, handle_pdf))
 
