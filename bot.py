@@ -2,11 +2,11 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-from convertapi import Api as ConvertApi  # التعديل الأساسي هنا
+from convertapi import ConvertApi  # التعديل الحاسم هنا
 
 # إعدادات ConvertAPI
-ConvertApi.configure(secret='secret_lFUCQ7x8MrYAJHsk')  # التهيئة بالطريقة الجديدة
-
+ConvertApi.secret = 'secret_lFUCQ7x8MrYAJHsk'  # الطريقة القديمة
+# إعدادات ConvertAPI
 # باقي الإعدادات بدون تغيير
 TOKEN = "5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc"
 
