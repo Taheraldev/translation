@@ -1,79 +1,54 @@
-import logging
+import telegram
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+import requests
 import os
-import convertapi
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-# إعداد ConvertAPI
-CONVERTAPI_SECRET = "secret_ZJOY2tBFX1c3T3hA"
-convertapi.api_secret = CONVERTAPI_SECRET
+# جایگزینی توکن بات تلگرام و کلید API pdf2docx
+TELEGRAM_BOT_TOKEN = "5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc"
+PDF2DOCX_API_KEY = "api_production_4fd69fa4d6a13fc2c89f09280b05babb71b8ed18da5f87bc9daa3198e0da5b03.67dd34d41b1ec0ad5910e28c.67ddb5411b1ec0ad5910eb1e"
 
-# إعدادات البوت
-TOKEN = "5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc"
-DOWNLOAD_PATH = "downloads"
-OUTPUT_PATH = "output"
+def start(update, context):
+    context.bot.send_message(chat_id=update.effective_chat.id, text="لطفاً یک فایل PDF ارسال کنید تا آن را به DOCX تبدیل کنم.")
 
-os.makedirs(DOWNLOAD_PATH, exist_ok=True)
-os.makedirs(OUTPUT_PATH, exist_ok=True)
+def handle_pdf(update, context):
+    file_id = update.message.document.file_id
+    file_info = context.bot.get_file(file_id)
+    file_url = file_info.file_path
 
-# تهيئة اللوجينج
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+    # دانلود فایل PDF
+    pdf_file = requests.get(file_url)
+    with open("input.pdf", "wb") as f:
+        f.write(pdf_file.content)
 
-def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text("أرسل ملف PDF لتحويله إلى DOCX.")
+    # تبدیل PDF به DOCX با استفاده از API pdf2docx
+    url = "https://pdf2docx.com/api/convert"
+    files = {"file": open("input.pdf", "rb")}
+    headers = {"Authorization": f"Bearer {PDF2DOCX_API_KEY}"}
+    response = requests.post(url, files=files, headers=headers)
 
-def convert_pdf_to_docx(pdf_path: str) -> str:
-    try:
-        logging.info(f"Converting file: {pdf_path}")
-        result = convertapi.convert('docx', { 'File': pdf_path }, from_format='pdf')
-        
-        if not result:
-            logging.error("ConvertAPI returned None")
-            return None
-        
-        if not hasattr(result, "save_files"):
-            logging.error("Result object has no 'save_files' method")
-            return None
-        
-        docx_files = result.save_files(OUTPUT_PATH)
-        
-        if not docx_files:
-            logging.error("No files were saved by ConvertAPI")
-            return None
-        
-        return docx_files[0]
-    except Exception as e:
-        logging.error(f"Error during conversion: {e}")
-        return None
-
-def handle_document(update: Update, context: CallbackContext) -> None:
-    file = update.message.document
-    if file.mime_type != "application/pdf":
-        update.message.reply_text("يرجى إرسال ملف PDF فقط.")
-        return
-    
-    pdf_file = file.get_file()
-    file_path = os.path.join(DOWNLOAD_PATH, file.file_name)
-    pdf_file.download(file_path)
-    
-    update.message.reply_text("جارٍ تحويل الملف، يرجى الانتظار...")
-    
-    docx_path = convert_pdf_to_docx(file_path)
-    
-    if docx_path:
-        update.message.reply_document(document=open(docx_path, "rb"), filename=os.path.basename(docx_path))
+    if response.status_code == 200:
+        with open("output.docx", "wb") as f:
+            f.write(response.content)
+        context.bot.send_document(chat_id=update.effective_chat.id, document=open("output.docx", "rb"))
     else:
-        update.message.reply_text("حدث خطأ أثناء التحويل. الرجاء المحاولة لاحقًا.")
+        context.bot.send_message(chat_id=update.effective_chat.id, text="متأسفانه در هنگام تبدیل خطایی رخ داد.")
+
+    # حذف فایل‌های موقت
+    os.remove("input.pdf")
+    os.remove("output.docx")
 
 def main():
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
-    
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.document, handle_document))
-    
+    updater = Updater(token=TELEGRAM_BOT_TOKEN, use_context=True)
+    dispatcher = updater.dispatcher
+
+    start_handler = CommandHandler('start', start)
+    pdf_handler = MessageHandler(Filters.document.mime_type("application/pdf"), handle_pdf)
+
+    dispatcher.add_handler(start_handler)
+    dispatcher.add_handler(pdf_handler)
+
     updater.start_polling()
     updater.idle()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
