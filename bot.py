@@ -8,7 +8,7 @@ from convertapi import ConvertApi  # استخدام الإصدار القديم
 ConvertApi.secret = 'secret_q4ijKpkWw17sLQx8'  # المفتاح السري
 
 # إعدادات البوت
-TOKEN = "5146976580:AAE2yXc-JK6MIHVlLDy-O4YODucS_u7Zq-8"
+TOKEN = "5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc"
 
 # خريطة التحويل المدعومة
 SUPPORTED_CONVERSIONS = {
