@@ -15,9 +15,11 @@ def start(update: Update, context: CallbackContext):
     update.message.reply_text("أرسل ملف PDF أو DOCX أو PPTX لتحويله.")
 
 def show_conversion_options(update: Update, context: CallbackContext, file_id: str, file_name: str):
+    context.user_data['file_id'] = file_id
+    context.user_data['file_name'] = file_name
     keyboard = [
-        [InlineKeyboardButton("تحويل إلى DOCX", callback_data=f"pdf_to_docx|{file_id}|{file_name}")],
-        [InlineKeyboardButton("تحويل إلى PPTX", callback_data=f"pdf_to_pptx|{file_id}|{file_name}")]
+        [InlineKeyboardButton("تحويل إلى DOCX", callback_data="pdf2docx")],
+        [InlineKeyboardButton("تحويل إلى PPTX", callback_data="pdf2pptx")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     update.message.reply_text("اختر نوع التحويل:", reply_markup=reply_markup)
@@ -33,7 +35,9 @@ def handle_document(update: Update, context: CallbackContext):
     if file.mime_type == "application/pdf":
         show_conversion_options(update, context, file_id, file_name)
     elif file.mime_type in ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.presentationml.presentation"]:
-        keyboard = [[InlineKeyboardButton("تحويل إلى PDF", callback_data=f"to_pdf|{file_id}|{file_name}")]]
+        context.user_data['file_id'] = file_id
+        context.user_data['file_name'] = file_name
+        keyboard = [[InlineKeyboardButton("تحويل إلى PDF", callback_data="to_pdf")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         update.message.reply_text("اختر نوع التحويل:", reply_markup=reply_markup)
     else:
@@ -43,11 +47,16 @@ def button_handler(update: Update, context: CallbackContext):
     query = update.callback_query
     query.answer()
     
-    data = query.data.split("|")
-    action, file_id, file_name = data[0], data[1], data[2]
+    action = query.data
+    file_id = context.user_data.get('file_id')
+    file_name = context.user_data.get('file_name')
+    
+    if not file_id or not file_name:
+        query.edit_message_text("حدث خطأ، يرجى إعادة إرسال الملف.")
+        return
     
     file_path = os.path.join(TEMP_FOLDER, file_name)
-    output_format = "pdf" if action == "to_pdf" else action.split("_to_")[1]
+    output_format = "pdf" if action == "to_pdf" else action.replace("pdf2", "")
     output_path = file_path.rsplit(".", 1)[0] + f".{output_format}"
     
     pdf_file = context.bot.getFile(file_id)
