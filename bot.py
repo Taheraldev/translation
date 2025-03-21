@@ -7,17 +7,27 @@ import pytesseract
 from googletrans import Translator
 
 # إعدادات البوت
-TOKEN = os.getenv("TOKEN")
+TOKEN = os.getenv("TOKEN")  # الحصول على التوكن من متغيرات البيئة
 translator = Translator()
 
 # الخط المستخدم للكتابة على الصورة (يجب توفير ملف الخط يدويًا)
-FONT_PATH = "Arial.ttf"  # استبدل بمسار ملف الخط العربي (مثال: tajawal.ttf)
+FONT_PATH = "arial.ttf"  # استبدل بمسار ملف الخط العربي (مثال: tajawal.ttf)
 
 # تفعيل اللوغاريثمات
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 def start(update: Update, context: CallbackContext):
     update.message.reply_text('مرحبًا! أرسل لي صورة تحتوي على نص إنجليزي وسأترجمها إلى العربية مع استبدال النص في الصورة.')
+
+def translate_text(text, src='en', dest='ar'):
+    try:
+        translation = translator.translate(text, src=src, dest=dest)
+        if translation and translation.text:
+            return translation.text
+        else:
+            return "فشل في الترجمة: النص المترجم غير متاح"
+    except Exception as e:
+        return f"فشل في الترجمة: {str(e)}"
 
 def handle_photo(update: Update, context: CallbackContext):
     try:
@@ -33,7 +43,7 @@ def handle_photo(update: Update, context: CallbackContext):
         data = pytesseract.image_to_data(img, lang='eng', output_type=pytesseract.Output.DICT)
         
         # ترجمة النصوص المكتشفة
-        translated_texts = [translator.translate(text, src='en', dest='ar').text for text in data['text']]
+        translated_texts = [translate_text(text, src='en', dest='ar') for text in data['text']]
         
         # رسم النص المترجم على الصورة
         draw = ImageDraw.Draw(img)
