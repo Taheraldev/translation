@@ -11,7 +11,7 @@ TOKEN = os.getenv("TOKEN")  # الحصول على التوكن من متغيرا
 translator = Translator()
 
 # الخط المستخدم للكتابة على الصورة (يجب توفير ملف الخط يدويًا)
-FONT_PATH = "arial.ttf"  # استبدل بمسار ملف الخط العربي (مثال: tajawal.ttf)
+FONT_PATH = "Arial.ttf"  # استبدل بمسار ملف الخط العربي (مثال: tajawal.ttf)
 
 # تفعيل اللوغاريثمات
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
