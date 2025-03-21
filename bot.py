@@ -1,57 +1,53 @@
-import telegram
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-import requests
 import os
+import convertapi
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
+# إعداد مفتاح ConvertAPI
+CONVERT_API_KEY = "secret_ZJOY2tBFX1c3T3hA"
+convertapi.api_secret = CONVERT_API_KEY
 
-TELEGRAM_BOT_TOKEN = "5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc"
-PDF2DOCX_API_KEY = "api_production_4fd69fa4d6a13fc2c89f09280b05babb71b8ed18da5f87bc9daa3198e0da5b03.67dd34d41b1ec0ad5910e28c.67ddb5411b1ec0ad5910eb1e"
+# مجلد التخزين المؤقت
+TEMP_FOLDER = "temp_files"
+os.makedirs(TEMP_FOLDER, exist_ok=True)
 
-def start(update, context):
-    context.bot.send_message(chat_id=update.effective_chat.id, text="أرسل لي ملف PDF وسأقوم بتحويله إلى DOCX.")
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("أرسل ملف PDF لتحويله إلى DOCX.")
 
-def handle_pdf(update, context):
-    file_id = update.message.document.file_id
-    file_info = context.bot.get_file(file_id)
-    file_url = file_info.file_path
+def convert_pdf_to_docx(pdf_path: str, docx_path: str):
+    convertapi.convert('docx', {'File': pdf_path}, from_format='pdf').save_files(docx_path)
 
-    # تحميل ملف PDF
-    pdf_file = requests.get(file_url)
-    with open("input.pdf", "wb") as f:
-        f.write(pdf_file.content)
-
-    # تحويل PDF إلى DOCX باستخدام pdf2docx API
-    url = "https://pdf2docx.com/api/convert"
-    files = {"file": open("input.pdf", "rb")}
-    headers = {"Authorization": f"Bearer {PDF2DOCX_API_KEY}"}
+def handle_document(update: Update, context: CallbackContext):
+    file = update.message.document
+    if file.mime_type != "application/pdf":
+        update.message.reply_text("يرجى إرسال ملف PDF فقط.")
+        return
+    
+    file_path = os.path.join(TEMP_FOLDER, file.file_name)
+    docx_path = file_path.replace(".pdf", ".docx")
+    
+    pdf_file = context.bot.getFile(file.file_id)
+    pdf_file.download(file_path)
+    
+    update.message.reply_text("جارٍ تحويل الملف... يرجى الانتظار.")
     try:
-        response = requests.post(url, files=files, headers=headers)
-
-        if response.status_code == 200:
-            with open("output.docx", "wb") as f:
-                f.write(response.content)
-            context.bot.send_document(chat_id=update.effective_chat.id, document=open("output.docx", "rb"))
-            os.remove("output.docx") # حذف ملف ال docx بعد إرساله
-        else:
-            context.bot.send_message(chat_id=update.effective_chat.id, text=f"حدث خطأ أثناء التحويل. حالة الاستجابة: {response.status_code}")
-    except requests.exceptions.RequestException as e:
-        context.bot.send_message(chat_id=update.effective_chat.id, text=f"حدث خطأ في الاتصال: {e}")
-
-    # حذف الملف المؤقت
-    os.remove("input.pdf")
+        convert_pdf_to_docx(file_path, docx_path)
+        update.message.reply_document(document=open(docx_path, "rb"))
+    except Exception as e:
+        update.message.reply_text(f"حدث خطأ أثناء التحويل: {str(e)}")
+    finally:
+        os.remove(file_path)
+        os.remove(docx_path)
 
 def main():
-    updater = Updater(token=TELEGRAM_BOT_TOKEN, use_context=True)
-    dispatcher = updater.dispatcher
-
-    start_handler = CommandHandler('start', start)
-    pdf_handler = MessageHandler(Filters.document.mime_type("application/pdf"), handle_pdf)
-
-    dispatcher.add_handler(start_handler)
-    dispatcher.add_handler(pdf_handler)
-
+    updater = Updater("5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc", use_context=True)
+    dp = updater.dispatcher
+    
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.document, handle_document))
+    
     updater.start_polling()
     updater.idle()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
