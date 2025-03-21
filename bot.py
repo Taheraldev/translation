@@ -3,7 +3,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 import requests
 import os
 
-# جایگزینی توکن بات تلگرام و کلید API pdf2docx
+
 TELEGRAM_BOT_TOKEN = "5264968049:AAHUniq68Nqq39CrFf8lVqerwetirQnGxzc"
 PDF2DOCX_API_KEY = "api_production_4fd69fa4d6a13fc2c89f09280b05babb71b8ed18da5f87bc9daa3198e0da5b03.67dd34d41b1ec0ad5910e28c.67ddb5411b1ec0ad5910eb1e"
 
